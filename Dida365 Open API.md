@@ -128,6 +128,7 @@ POST /open/v1/task
 | Body | title (required) | Task title | string |
 | Body | content | Task content | string |
 | Body | desc | Description of checklist | string |
+| Body | tags | Task tags | < string > array |
 | Body | isAllDay | All day | boolean |
 | Body | startDate | Start date and time in "yyyy-MM-dd'T'HH:mm:ssZ" format. Example : "2019-11-13T03:00:00+0000" | date |
 | Body | dueDate | Due date and time in "yyyy-MM-dd'T'HH:mm:ssZ" format. Example : "2019-11-13T03:00:00+0000" | date |

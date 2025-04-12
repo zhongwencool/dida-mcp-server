@@ -7,7 +7,7 @@
 - **OAuth认证**：使用安全的OAuth访问令牌登录到您的滴答清单账户
 - **项目管理**：列出、创建、更新和删除项目
 - **任务管理**：列出、创建、完成和删除任务
-- **标签管理**：列出标签，为任务添加/移除标签
+- **标签管理**：在创建或更新任务时添加标签
 - **MCP 集成**：通过 MCP 工具暴露所有功能
 
 ## 系统要求
@@ -205,17 +205,14 @@ async function main() {
 | 工具 | 描述 | 参数 |
 |------|-------------|------------|
 | `list-tasks` | 列出所有任务 | `projectId`: (可选) 按项目 ID 筛选任务 |
-| `create-task` | 创建新任务 | `title`: 任务标题<br>`content`: (可选) 任务内容/描述<br>`priority`: (可选) 任务优先级 (0-5)<br>`dueDate`: (可选) 任务截止日期 (ISO 格式)<br>`projectId`: (可选) 项目 ID<br>`tags`: (可选) 标签名称数组 |
+| `create-task` | 创建新任务 | `title`: 任务标题<br>`content`: (可选) 任务内容/描述<br>`priority`: (可选) 任务优先级 (0-5)<br>`dueDate`: (可选) 任务截止日期 (ISO 格式)<br>`projectId`: (可选) 项目 ID<br>`tags`: (可选) 逗号分隔的标签列表 |
+| `update-task` | 更新现有任务 | `id`: 任务 ID<br>`projectId`: 项目 ID<br>`title`: (可选) 任务标题<br>`content`: (可选) 任务内容/描述<br>`priority`: (可选) 任务优先级 (0-5)<br>`dueDate`: (可选) 任务截止日期 (ISO 格式)<br>`startDate`: (可选) 任务开始日期 (ISO 格式)<br>`isAllDay`: (可选) 是否为全天任务<br>`tags`: (可选) 逗号分隔的标签列表 |
 | `complete-task` | 将任务标记为已完成 | `id`: 任务 ID |
-| `delete-task` | 删除任务 | `id`: 任务 ID |
+| `delete-task` | 删除任务 | `id`: 任务 ID<br>`projectId`: 项目 ID |
 
 ### 标签管理
 
-| 工具 | 描述 | 参数 |
-|------|-------------|------------|
-| `list-tags` | 列出所有标签 | 无 |
-| `add-tag-to-task` | 为任务添加标签 | `taskId`: 任务 ID<br>`tagName`: 标签名称 |
-| `remove-tag-from-task` | 从任务中移除标签 | `taskId`: 任务 ID<br>`tagName`: 标签名称 |
+标签管理功能已集成到任务创建和更新工具中。在创建或更新任务时，可以使用 `tags` 参数指定逗号分隔的标签列表。
 
 ## 技术实现细节
 
@@ -280,12 +277,24 @@ await client.callTool("create-task", {
   priority: 3,
   dueDate: "2023-10-15T00:00:00Z",
   projectId: project.id,
-  tags: ["紧急"]
+  tags: "紧急,工作"
 });
 
 // 列出项目中的所有任务
 const tasksResult = await client.callTool("list-tasks", {
   projectId: project.id
+});
+
+const tasks = JSON.parse(tasksResult.content[0].text);
+const task = tasks[0];
+
+// 更新任务并添加标签
+await client.callTool("update-task", {
+  id: task.id,
+  projectId: task.projectId,
+  title: task.title + " (已更新)",
+  priority: 5,
+  tags: "紧急,重要,季度报告"
 });
 
 console.log(tasksResult.content[0].text);

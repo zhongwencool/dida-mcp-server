@@ -1,19 +1,16 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import fetch from 'node-fetch';
-import { v4 as uuidv4 } from 'uuid';
 
 // Mock dependencies
 jest.mock('node-fetch');
-jest.mock('uuid');
 const mockedFetch = fetch as jest.MockedFunction<typeof fetch>;
-const mockedUuidv4 = uuidv4 as jest.MockedFunction<typeof uuidv4>;
 
-// Mock response data
-const mockLoginResponse = {
-  token: 'mock-token',
-  userId: 'mock-user-id',
-  username: 'mock-username',
-  inboxId: 'mock-inbox-id'
+// Mock response data for Open API
+const mockTokenResponse = {
+  access_token: 'mock-access-token',
+  token_type: 'Bearer',
+  expires_in: 3600,
+  scope: 'tasks:read tasks:write'
 };
 
 const mockProjectsResponse = [
@@ -21,68 +18,76 @@ const mockProjectsResponse = [
     id: 'project1',
     name: 'Work',
     color: '#FF0000',
-    sortOrder: -1099511627776,
+    viewMode: 'list',
     kind: 'TASK'
   },
   {
     id: 'project2',
     name: 'Personal',
     color: '#00FF00',
-    sortOrder: -1099511627775,
+    viewMode: 'list',
     kind: 'TASK'
   }
 ];
 
-const mockBatchCheckResponse = {
-  checkPoint: 12345,
-  syncTaskBean: {
-    update: [
-      {
-        id: 'task1',
-        title: 'Task 1',
-        content: 'Task 1 content',
-        projectId: 'project1',
-        status: 0,
-        tags: ['important']
-      },
-      {
-        id: 'task2',
-        title: 'Task 2',
-        content: 'Task 2 content',
-        projectId: 'project2',
-        status: 0,
-        tags: []
-      }
-    ],
-    add: [],
-    delete: [],
-    empty: false
+const mockProjectDataResponse = {
+  project: {
+    id: 'project1',
+    name: 'Work',
+    color: '#FF0000',
+    closed: false,
+    viewMode: 'list',
+    kind: 'TASK'
   },
-  tags: [
-    { name: 'important', color: '#FF0000' },
-    { name: 'personal', color: '#00FF00' }
+  tasks: [
+    {
+      id: 'task1',
+      projectId: 'project1',
+      title: 'Task 1',
+      content: 'Task 1 content',
+      priority: 0,
+      status: 0,
+      tags: ['important']
+    },
+    {
+      id: 'task2',
+      projectId: 'project1',
+      title: 'Task 2',
+      content: 'Task 2 content',
+      priority: 0,
+      status: 0,
+      tags: []
+    }
   ],
-  inboxId: 'mock-inbox-id'
+  columns: []
 };
 
-const mockBatchTaskResponse = {
-  id2etag: {
-    'new-task-id': 'etag1'
-  },
-  id2error: {}
+const mockTaskResponse = {
+  id: 'task1',
+  projectId: 'project1',
+  title: 'Task 1',
+  content: 'Task 1 content',
+  priority: 0,
+  status: 0,
+  tags: ['important']
+};
+
+const mockCreatedTaskResponse = {
+  id: 'new-task-id',
+  projectId: 'project1',
+  title: 'New Task',
+  content: 'New Task content',
+  priority: 0,
+  status: 0
 };
 
 describe('TickTick MCP Server', () => {
   let server: McpServer;
-  
+
   beforeEach(() => {
     // Reset mocks
     mockedFetch.mockReset();
-    mockedUuidv4.mockReset();
-    
-    // Mock UUID generation
-    mockedUuidv4.mockReturnValue('00000000-0000-0000-0000-000000000000');
-    
+
     // Create a new server instance for each test
     server = new McpServer({
       name: 'dida-mcp-server-test',
@@ -92,7 +97,7 @@ describe('TickTick MCP Server', () => {
         tools: {},
       },
     });
-    
+
     // Register simplified versions of the tools for testing
     server.tool(
       'login',
@@ -110,7 +115,7 @@ describe('TickTick MCP Server', () => {
             },
             body: JSON.stringify({ username, password }),
           });
-          
+
           if (!response.ok) {
             const errorData = await response.json();
             return {
@@ -122,7 +127,7 @@ describe('TickTick MCP Server', () => {
               ],
             };
           }
-          
+
           const data = await response.json();
           return {
             content: [
@@ -144,7 +149,7 @@ describe('TickTick MCP Server', () => {
         }
       }
     );
-    
+
     server.tool(
       'list-projects',
       'List all projects',
@@ -158,7 +163,7 @@ describe('TickTick MCP Server', () => {
               'Cookie': 't=mock-token',
             },
           });
-          
+
           if (!response.ok) {
             return {
               content: [
@@ -169,7 +174,7 @@ describe('TickTick MCP Server', () => {
               ],
             };
           }
-          
+
           const projects = await response.json();
           return {
             content: [
@@ -191,7 +196,7 @@ describe('TickTick MCP Server', () => {
         }
       }
     );
-    
+
     server.tool(
       'create-task',
       'Create a new task',
@@ -204,7 +209,7 @@ describe('TickTick MCP Server', () => {
         try {
           const taskId = uuidv4().replace(/-/g, '');
           const now = new Date().toISOString();
-          
+
           const newTask = {
             id: taskId,
             title,
@@ -217,7 +222,7 @@ describe('TickTick MCP Server', () => {
             createdTime: now,
             modifiedTime: now
           };
-          
+
           const batchRequest = {
             add: [newTask],
             update: [],
@@ -226,7 +231,7 @@ describe('TickTick MCP Server', () => {
             updateAttachments: [],
             deleteAttachments: []
           };
-          
+
           const response = await fetch('https://api.dida365.com/api/v2/batch/task', {
             method: 'POST',
             headers: {
@@ -235,7 +240,7 @@ describe('TickTick MCP Server', () => {
             },
             body: JSON.stringify(batchRequest),
           });
-          
+
           if (!response.ok) {
             return {
               content: [
@@ -246,7 +251,7 @@ describe('TickTick MCP Server', () => {
               ],
             };
           }
-          
+
           return {
             content: [
               {
@@ -268,52 +273,54 @@ describe('TickTick MCP Server', () => {
       }
     );
   });
-  
+
   describe('Authentication Tool', () => {
-    test('login tool should authenticate successfully', async () => {
-      // Mock successful login response
+    test('login-with-token tool should authenticate successfully', async () => {
+      // Mock successful projects response for token verification
       mockedFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockLoginResponse
+        json: async () => mockProjectsResponse
       } as any);
-      
+
       // Get the tool handler
-      const handler = (server as any)._registeredTools['login'].callback;
-      
+      const handler = (server as any)._registeredTools['login-with-token'].callback;
+
       // Call the handler
-      const result = await handler({ username: 'test@example.com', password: 'password' });
-      
+      const result = await handler({});
+
       // Verify fetch was called with correct arguments
       expect(mockedFetch).toHaveBeenCalledWith(
-        'https://api.dida365.com/api/v2/user/signon?wc=true&remember=true',
+        'https://api.dida365.com/open/v1/project',
         expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ username: 'test@example.com', password: 'password' }),
+          method: 'GET',
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer mock-access-token'
+          }),
         })
       );
-      
+
       // Verify result
-      expect(result.content[0].text).toContain('Successfully logged in');
+      expect(result.content[0].text).toContain('Successfully authenticated with access token');
     });
-    
-    test('login tool should handle authentication failure', async () => {
-      // Mock failed login response
+
+    test('login-with-token tool should handle authentication failure', async () => {
+      // Mock failed projects response
       mockedFetch.mockResolvedValueOnce({
         ok: false,
-        json: async () => ({ errorCode: 'AUTH_FAILED', errorMessage: 'Invalid credentials' })
+        statusText: 'Unauthorized'
       } as any);
-      
+
       // Get the tool handler
-      const handler = (server as any)._registeredTools['login'].callback;
-      
+      const handler = (server as any)._registeredTools['login-with-token'].callback;
+
       // Call the handler
-      const result = await handler({ username: 'test@example.com', password: 'wrong-password' });
-      
+      const result = await handler({});
+
       // Verify result
       expect(result.content[0].text).toContain('Authentication failed');
     });
   });
-  
+
   describe('Project Management Tools', () => {
     test('list-projects tool should return projects', async () => {
       // Mock successful projects response
@@ -321,64 +328,93 @@ describe('TickTick MCP Server', () => {
         ok: true,
         json: async () => mockProjectsResponse
       } as any);
-      
+
       // Get the tool handler
       const handler = (server as any)._registeredTools['list-projects'].callback;
-      
+
       // Call the handler
       const result = await handler({});
-      
+
       // Verify fetch was called with correct arguments
       expect(mockedFetch).toHaveBeenCalledWith(
-        'https://api.dida365.com/api/v2/projects',
+        'https://api.dida365.com/open/v1/project',
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({
-            'Cookie': 't=mock-token'
+            'Authorization': 'Bearer mock-access-token'
           }),
         })
       );
-      
+
       // Verify result
       expect(result.content[0].text).toBe(JSON.stringify(mockProjectsResponse, null, 2));
     });
   });
-  
+
   describe('Task Management Tools', () => {
     test('create-task tool should create a task', async () => {
       // Mock successful task creation response
       mockedFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockBatchTaskResponse
+        json: async () => mockCreatedTaskResponse
       } as any);
-      
+
       // Get the tool handler
       const handler = (server as any)._registeredTools['create-task'].callback;
-      
+
       // Call the handler
-      const result = await handler({ 
-        title: 'Test Task', 
-        content: 'Test Content',
-        projectId: 'project1'
+      const result = await handler({
+        title: 'New Task',
+        content: 'New Task content',
+        projectId: 'project1',
+        priority: 0
       });
-      
-      // Verify UUID was called
-      expect(mockedUuidv4).toHaveBeenCalled();
-      
+
       // Verify fetch was called with correct arguments
       expect(mockedFetch).toHaveBeenCalledWith(
-        'https://api.dida365.com/api/v2/batch/task',
+        'https://api.dida365.com/open/v1/task',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
-            'Cookie': 't=mock-token'
+            'Authorization': 'Bearer mock-access-token'
           }),
-          body: expect.stringContaining('Test Task'),
+          body: expect.stringContaining('New Task'),
         })
       );
-      
+
       // Verify result
       expect(result.content[0].text).toContain('Task created successfully');
+    });
+
+    test('get-task tool should retrieve a task', async () => {
+      // Mock successful task retrieval response
+      mockedFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockTaskResponse
+      } as any);
+
+      // Get the tool handler
+      const handler = (server as any)._registeredTools['get-task'].callback;
+
+      // Call the handler
+      const result = await handler({
+        id: 'task1',
+        projectId: 'project1'
+      });
+
+      // Verify fetch was called with correct arguments
+      expect(mockedFetch).toHaveBeenCalledWith(
+        'https://api.dida365.com/open/v1/project/project1/task/task1',
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer mock-access-token'
+          })
+        })
+      );
+
+      // Verify result
+      expect(result.content[0].text).toBe(JSON.stringify(mockTaskResponse, null, 2));
     });
   });
 });

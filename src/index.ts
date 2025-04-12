@@ -2,10 +2,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import fetch from 'node-fetch';
-import { v4 as uuidv4 } from 'uuid';
-import crypto from 'crypto';
+// No longer need uuid or crypto for Open API implementation
 import fs from 'fs';
 import path from 'path';
+// Import system prompt
+import { systemPrompt } from './systemPrompt';
 // No longer need parseArgs as we automatically detect the token file
 
 // Create server instance
@@ -15,35 +16,18 @@ const server = new McpServer({
     capabilities: {
         resources: {},
         tools: {},
-    },
+        prompts: {},
+    }
 });
 
 // Config file path
 const CONFIG_FILE = path.join(process.env.HOME || process.env.USERPROFILE || '.', '.dida-mcp-config.json');
 
-// TickTick API base URL
-const API_BASE_URL = 'https://api.dida365.com/api/v2';
-
-// User agent and device information
-const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:95.0) Gecko/20100101 Firefox/95.0";
-const getDeviceInfo = () => {
-    const deviceId = '6490' + crypto.randomBytes(10).toString('hex');
-    return JSON.stringify({
-        "platform": "web",
-        "os": "OS X",
-        "device": "Firefox 123.0",
-        "name": "unofficial api!",
-        "version": 4531,
-        "id": deviceId,
-        "channel": "website",
-        "campaign": "",
-        "websocket": ""
-    });
-};
+// TickTick API base URL for Open API
+const API_BASE_URL = 'https://api.dida365.com/open/v1';
 
 // Authentication state
 let accessToken: string | null = null;
-let inboxId: string | null = null;
 let isOAuthAuth = false;
 
 // Automatically check for and load access token from config file if it exists
@@ -64,19 +48,7 @@ try {
     console.error(`Error loading access token: ${error instanceof Error ? error.message : String(error)}`);
 }
 
-// Task status enum
-enum TaskStatus {
-    TODO = 0,
-    COMPLETED = 2
-}
-
-// Task priority enum
-enum TaskPriority {
-    NONE = 0,
-    LOW = 1,
-    MEDIUM = 3,
-    HIGH = 5
-}
+// Task status and priority enums are no longer needed as we're using the raw values from the API
 
 // Helper function to get auth headers
 function getAuthHeaders() {
@@ -109,7 +81,7 @@ server.tool(
             }
 
             // Use the projects API to verify the token works
-            const response = await fetch(`${API_BASE_URL}/projects`, {
+            const response = await fetch(`${API_BASE_URL}/project`, {
                 method: 'GET',
                 headers: getAuthHeaders(),
             });
@@ -165,7 +137,7 @@ server.tool(
                 };
             }
 
-            const response = await fetch(`${API_BASE_URL}/projects`, {
+            const response = await fetch(`${API_BASE_URL}/project`, {
                 method: 'GET',
                 headers: getAuthHeaders(),
             });
@@ -223,18 +195,14 @@ server.tool(
                 };
             }
 
-            // Generate a unique ID for the project
-            const projectId = uuidv4().replace(/-/g, '');
-
             const newProject = {
-                id: projectId,
                 name: name,
-                color: color || null,
-                sortOrder: -1099511627776, // Default sort order
+                color: color || "#F18181", // Default color
+                viewMode: "list",
                 kind: "TASK"
             };
 
-            const response = await fetch(`${API_BASE_URL}/projects`, {
+            const response = await fetch(`${API_BASE_URL}/project`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify(newProject),
@@ -298,8 +266,8 @@ server.tool(
             if (name !== undefined) updateData.name = name;
             if (color !== undefined) updateData.color = color;
 
-            const response = await fetch(`${API_BASE_URL}/projects/${id}`, {
-                method: 'PATCH',
+            const response = await fetch(`${API_BASE_URL}/project/${id}`, {
+                method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify(updateData),
             });
@@ -356,7 +324,7 @@ server.tool(
                 };
             }
 
-            const response = await fetch(`${API_BASE_URL}/projects/${id}`, {
+            const response = await fetch(`${API_BASE_URL}/project/${id}`, {
                 method: 'DELETE',
                 headers: getAuthHeaders(),
             });
@@ -393,64 +361,6 @@ server.tool(
     }
 );
 
-server.tool(
-    "get-project-data",
-    "Get comprehensive project data including tasks, subtasks, and columns",
-    {
-        projectId: z.string().describe("Project ID"),
-    },
-    async ({ projectId }) => {
-        try {
-            if (!accessToken) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: "Not authenticated. Please login first.",
-                        },
-                    ],
-                };
-            }
-
-            // Use the project/{projectId}/data endpoint to get comprehensive project data
-            const response = await fetch(`${API_BASE_URL}/project/${projectId}/data`, {
-                method: 'GET',
-                headers: getAuthHeaders(),
-            });
-
-            if (!response.ok) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to get project data: ${response.statusText}`,
-                        },
-                    ],
-                };
-            }
-
-            const projectData = await response.json();
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: JSON.stringify(projectData, null, 2),
-                    },
-                ],
-            };
-        } catch (error) {
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Error getting project data: ${error instanceof Error ? error.message : String(error)}`,
-                    },
-                ],
-            };
-        }
-    }
-);
-
 // Task management tools
 server.tool(
     "list-tasks",
@@ -471,42 +381,62 @@ server.tool(
                 };
             }
 
-            // TickTick doesn't have a direct endpoint to get all tasks
-            // We need to use the batch/check endpoint to get all tasks
-            const response = await fetch(`${API_BASE_URL}/batch/check/0`, {
-                method: 'GET',
-                headers: getAuthHeaders(),
-            });
-
-            if (!response.ok) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to get tasks: ${response.statusText}`,
-                        },
-                    ],
-                };
-            }
-
-            const data = await response.json();
-
-            // Combine tasks from different sources in the response
             let tasks = [];
 
-            if (data.syncTaskBean && !data.syncTaskBean.empty) {
-                if (data.syncTaskBean.update && data.syncTaskBean.update.length > 0) {
-                    tasks.push(...data.syncTaskBean.update);
-                }
-
-                if (data.syncTaskBean.add && data.syncTaskBean.add.length > 0) {
-                    tasks.push(...data.syncTaskBean.add);
-                }
-            }
-
-            // Filter by project ID if provided
             if (projectId) {
-                tasks = tasks.filter(task => task.projectId === projectId);
+                // If projectId is provided, use the project data endpoint to get tasks
+                const response = await fetch(`${API_BASE_URL}/project/${projectId}/data`, {
+                    method: 'GET',
+                    headers: getAuthHeaders(),
+                });
+
+                if (!response.ok) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Failed to get tasks: ${response.statusText}`,
+                            },
+                        ],
+                    };
+                }
+
+                const data = await response.json();
+                tasks = data.tasks || [];
+            } else {
+                // If no projectId is provided, get all projects first
+                const projectsResponse = await fetch(`${API_BASE_URL}/project`, {
+                    method: 'GET',
+                    headers: getAuthHeaders(),
+                });
+
+                if (!projectsResponse.ok) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Failed to get projects: ${projectsResponse.statusText}`,
+                            },
+                        ],
+                    };
+                }
+
+                const projects = await projectsResponse.json();
+
+                // For each project, get its tasks
+                for (const project of projects) {
+                    const projectDataResponse = await fetch(`${API_BASE_URL}/project/${project.id}/data`, {
+                        method: 'GET',
+                        headers: getAuthHeaders(),
+                    });
+
+                    if (projectDataResponse.ok) {
+                        const projectData = await projectDataResponse.json();
+                        if (projectData.tasks && projectData.tasks.length > 0) {
+                            tasks.push(...projectData.tasks);
+                        }
+                    }
+                }
             }
 
             return {
@@ -539,7 +469,7 @@ server.tool(
         priority: z.number().min(0).max(5).optional().describe("Task priority (0-5)"),
         dueDate: z.string().datetime().optional().describe("Task due date (ISO format)"),
         projectId: z.string().optional().describe("Project ID (defaults to inbox)"),
-        tags: z.array(z.string()).optional().describe("Array of tag names"),
+        tags: z.string().optional().describe("Comma-separated list of tag names"),
     },
     async ({ title, content, priority, dueDate, projectId, tags }) => {
         try {
@@ -554,53 +484,38 @@ server.tool(
                 };
             }
 
-            // Generate a unique ID for the task
-            const taskId = uuidv4().replace(/-/g, '');
-            const now = new Date().toISOString();
-
             // Use inbox if no project is specified
-            const taskProjectId = projectId || inboxId;
-
-            if (!taskProjectId) {
+            if (!projectId) {
                 return {
                     content: [
                         {
                             type: "text",
-                            text: "No project ID specified and inbox ID not available. Please login first.",
+                            text: "Project ID is required for the Open API. Please specify a project ID.",
                         },
                     ],
                 };
             }
 
-            const newTask = {
-                id: taskId,
+            const newTask: any = {
                 title: title,
                 content: content || '',
                 priority: priority || 0,
-                status: 0, // TODO status
-                projectId: taskProjectId,
+                projectId: projectId,
                 dueDate: dueDate,
-                tags: tags || [],
-                sortOrder: -2199023452160, // Default sort order
                 timeZone: 'Asia/Shanghai',
-                isAllDay: false,
-                createdTime: now,
-                modifiedTime: now
+                isAllDay: false
             };
 
-            const batchRequest = {
-                add: [newTask],
-                update: [],
-                delete: [],
-                addAttachments: [],
-                updateAttachments: [],
-                deleteAttachments: []
-            };
+            // Add tags if provided
+            if (tags) {
+                // Convert comma-separated string to array
+                newTask.tags = tags.split(',').map(tag => tag.trim());
+            }
 
-            const response = await fetch(`${API_BASE_URL}/batch/task`, {
+            const response = await fetch(`${API_BASE_URL}/task`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
-                body: JSON.stringify(batchRequest),
+                body: JSON.stringify(newTask),
             });
 
             if (!response.ok) {
@@ -614,24 +529,13 @@ server.tool(
                 };
             }
 
-            const result = await response.json();
-
-            if (result.id2error && result.id2error[taskId]) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to create task: ${result.id2error[taskId]}`,
-                        },
-                    ],
-                };
-            }
+            const createdTask = await response.json();
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Task created successfully:\n${JSON.stringify(newTask, null, 2)}`,
+                        text: `Task created successfully:\n${JSON.stringify(createdTask, null, 2)}`,
                     },
                 ],
             };
@@ -667,72 +571,64 @@ server.tool(
                 };
             }
 
-            // First get all tasks to find the one we want to update
-            const checkResponse = await fetch(`${API_BASE_URL}/batch/check/0`, {
+            // First we need to find the project ID for this task
+            // We'll need to search through all projects
+            const projectsResponse = await fetch(`${API_BASE_URL}/project`, {
                 method: 'GET',
                 headers: getAuthHeaders(),
             });
 
-            if (!checkResponse.ok) {
+            if (!projectsResponse.ok) {
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Failed to get tasks: ${checkResponse.statusText}`,
+                            text: `Failed to get projects: ${projectsResponse.statusText}`,
                         },
                     ],
                 };
             }
 
-            const checkData = await checkResponse.json();
+            const projects = await projectsResponse.json();
+            let taskProjectId = null;
+            let foundTask = null;
 
-            // Find the task in the response
-            let existingTask = null;
+            // Search for the task in each project
+            for (const project of projects) {
+                const projectDataResponse = await fetch(`${API_BASE_URL}/project/${project.id}/data`, {
+                    method: 'GET',
+                    headers: getAuthHeaders(),
+                });
 
-            if (checkData.syncTaskBean && !checkData.syncTaskBean.empty) {
-                if (checkData.syncTaskBean.update && checkData.syncTaskBean.update.length > 0) {
-                    existingTask = checkData.syncTaskBean.update.find((t: any) => t.id === id);
-                }
-
-                if (!existingTask && checkData.syncTaskBean.add && checkData.syncTaskBean.add.length > 0) {
-                    existingTask = checkData.syncTaskBean.add.find((t: any) => t.id === id);
+                if (projectDataResponse.ok) {
+                    const projectData = await projectDataResponse.json();
+                    if (projectData.tasks) {
+                        const task = projectData.tasks.find((t: any) => t.id === id);
+                        if (task) {
+                            taskProjectId = project.id;
+                            foundTask = task;
+                            break;
+                        }
+                    }
                 }
             }
 
-            if (!existingTask) {
+            if (!taskProjectId || !foundTask) {
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Task with ID ${id} not found`,
+                            text: `Task with ID ${id} not found in any project`,
                         },
                     ],
                 };
             }
 
-            // Update the task status to completed
-            const now = new Date().toISOString();
-
-            const updatedTask = {
-                ...existingTask,
-                status: TaskStatus.COMPLETED,
-                modifiedTime: now,
-                completedTime: now
-            };
-
-            const batchRequest = {
-                add: [],
-                update: [updatedTask],
-                delete: [],
-                addAttachments: [],
-                updateAttachments: [],
-                deleteAttachments: []
-            };
-
-            const response = await fetch(`${API_BASE_URL}/batch/task`, {
+            // Complete the task using the complete endpoint
+            const response = await fetch(`${API_BASE_URL}/project/${taskProjectId}/task/${id}/complete`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
-                body: JSON.stringify(batchRequest),
+                // No body needed for the complete endpoint
             });
 
             if (!response.ok) {
@@ -781,12 +677,20 @@ server.tool(
 );
 
 server.tool(
-    "delete-task",
-    "Delete a task",
+    "update-task",
+    "Update an existing task",
     {
         id: z.string().describe("Task ID"),
+        projectId: z.string().describe("Project ID"),
+        title: z.string().min(1).max(200).optional().describe("Task title"),
+        content: z.string().max(2000).optional().describe("Task content/description"),
+        priority: z.number().min(0).max(5).optional().describe("Task priority (0-5)"),
+        dueDate: z.string().datetime().optional().describe("Task due date (ISO format)"),
+        startDate: z.string().datetime().optional().describe("Task start date (ISO format)"),
+        isAllDay: z.boolean().optional().describe("Whether the task is an all-day task"),
+        tags: z.string().optional().describe("Comma-separated list of tag names"),
     },
-    async ({ id }) => {
+    async ({ id, projectId, title, content, priority, dueDate, startDate, isAllDay, tags }) => {
         try {
             if (!accessToken) {
                 return {
@@ -799,19 +703,52 @@ server.tool(
                 };
             }
 
-            const batchRequest = {
-                add: [],
-                update: [],
-                delete: [id],
-                addAttachments: [],
-                updateAttachments: [],
-                deleteAttachments: []
+            // First get the task to update
+            const getResponse = await fetch(`${API_BASE_URL}/project/${projectId}/task/${id}`, {
+                method: 'GET',
+                headers: getAuthHeaders(),
+            });
+
+            if (!getResponse.ok) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to get task: ${getResponse.statusText}`,
+                        },
+                    ],
+                };
+            }
+
+            const existingTask = await getResponse.json();
+
+            // Prepare the update data
+            const updateData: any = {
+                id: id,
+                projectId: projectId,
+                title: title || existingTask.title,
+                content: content !== undefined ? content : existingTask.content,
+                priority: priority !== undefined ? priority : existingTask.priority,
+                dueDate: dueDate !== undefined ? dueDate : existingTask.dueDate,
+                startDate: startDate !== undefined ? startDate : existingTask.startDate,
+                isAllDay: isAllDay !== undefined ? isAllDay : existingTask.isAllDay,
+                timeZone: existingTask.timeZone || 'Asia/Shanghai',
             };
 
-            const response = await fetch(`${API_BASE_URL}/batch/task`, {
+            // Handle tags if provided
+            if (tags !== undefined) {
+                // Convert comma-separated string to array
+                updateData.tags = tags ? tags.split(',').map(tag => tag.trim()) : [];
+            } else if (existingTask.tags) {
+                // Keep existing tags if not explicitly changed
+                updateData.tags = existingTask.tags;
+            }
+
+            // Update the task
+            const response = await fetch(`${API_BASE_URL}/task/${id}`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
-                body: JSON.stringify(batchRequest),
+                body: JSON.stringify(updateData),
             });
 
             if (!response.ok) {
@@ -819,7 +756,126 @@ server.tool(
                     content: [
                         {
                             type: "text",
-                            text: `Task with ID ${id} not found`,
+                            text: `Failed to update task: ${response.statusText}`,
+                        },
+                    ],
+                };
+            }
+
+            const updatedTask = await response.json();
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Task updated successfully:\n${JSON.stringify(updatedTask, null, 2)}`,
+                    },
+                ],
+            };
+        } catch (error) {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Error updating task: ${error instanceof Error ? error.message : String(error)}`,
+                    },
+                ],
+            };
+        }
+    }
+);
+
+server.tool(
+    "get-task",
+    "Get a task by ID",
+    {
+        id: z.string().describe("Task ID"),
+        projectId: z.string().describe("Project ID"),
+    },
+    async ({ id, projectId }) => {
+        try {
+            if (!accessToken) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Not authenticated. Please login first.",
+                        },
+                    ],
+                };
+            }
+
+            const response = await fetch(`${API_BASE_URL}/project/${projectId}/task/${id}`, {
+                method: 'GET',
+                headers: getAuthHeaders(),
+            });
+
+            if (!response.ok) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to get task: ${response.statusText}`,
+                        },
+                    ],
+                };
+            }
+
+            const task = await response.json();
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: JSON.stringify(task, null, 2),
+                    },
+                ],
+            };
+        } catch (error) {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Error getting task: ${error instanceof Error ? error.message : String(error)}`,
+                    },
+                ],
+            };
+        }
+    }
+);
+
+server.tool(
+    "delete-task",
+    "Delete a task",
+    {
+        id: z.string().describe("Task ID"),
+        projectId: z.string().describe("Project ID"),
+    },
+    async ({ id, projectId }) => {
+        try {
+            if (!accessToken) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Not authenticated. Please login first.",
+                        },
+                    ],
+                };
+            }
+
+            // Use the provided projectId directly
+
+            // Delete the task using the delete endpoint
+            const response = await fetch(`${API_BASE_URL}/project/${projectId}/task/${id}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders(),
+            });
+
+            if (!response.ok) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Task with ID ${id} not found in project ${projectId}`,
                         },
                     ],
                 };
@@ -828,7 +884,7 @@ server.tool(
                 content: [
                     {
                         type: "text",
-                        text: `Task with ID ${id} deleted successfully`,
+                        text: `Task with ID ${id} deleted successfully from project ${projectId}`,
                     },
                 ],
             };
@@ -845,359 +901,25 @@ server.tool(
     }
 );
 
-// Tag management tools
-server.tool(
-    "list-tags",
-    "List all tags",
+
+
+// Register the system prompt
+server.prompt(
+    "gpt-prompt",
+    "Get the prompt for the GTD assistant",
     {},
     async () => {
-        try {
-            if (!accessToken) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: "Not authenticated. Please login first.",
-                        },
-                    ],
-                };
-            }
-
-            // TickTick doesn't have a direct endpoint to get all tags
-            // We need to use the batch/check endpoint to get all tags
-            const response = await fetch(`${API_BASE_URL}/batch/check/0`, {
-                method: 'GET',
-                headers: getAuthHeaders(),
-            });
-
-            if (!response.ok) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to get tags: ${response.statusText}`,
-                        },
-                    ],
-                };
-            }
-
-            const data = await response.json();
-
-            // Extract tags from the response
-            const tags = data.tags || [];
-
-            return {
-                content: [
-                    {
+        return {
+            messages: [
+                {
+                    role: "user",
+                    content: {
                         type: "text",
-                        text: JSON.stringify(tags, null, 2),
-                    },
-                ],
-            };
-        } catch (error) {
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Error listing tags: ${error instanceof Error ? error.message : String(error)}`,
-                    },
-                ],
-            };
-        }
-    }
-);
-
-server.tool(
-    "add-tag-to-task",
-    "Add a tag to a task",
-    {
-        taskId: z.string().describe("Task ID"),
-        tagName: z.string().min(1).describe("Tag name"),
-    },
-    async ({ taskId, tagName }) => {
-        try {
-            if (!accessToken) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: "Not authenticated. Please login first.",
-                        },
-                    ],
-                };
-            }
-
-            // First get all tasks to find the one we want to update
-            const checkResponse = await fetch(`${API_BASE_URL}/batch/check/0`, {
-                method: 'GET',
-                headers: getAuthHeaders(),
-            });
-
-            if (!checkResponse.ok) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to get tasks: ${checkResponse.statusText}`,
-                        },
-                    ],
-                };
-            }
-
-            const checkData = await checkResponse.json();
-
-            // Find the task in the response
-            let existingTask = null;
-
-            if (checkData.syncTaskBean && !checkData.syncTaskBean.empty) {
-                if (checkData.syncTaskBean.update && checkData.syncTaskBean.update.length > 0) {
-                    existingTask = checkData.syncTaskBean.update.find((t: any) => t.id === taskId);
+                        text: systemPrompt
+                    }
                 }
-
-                if (!existingTask && checkData.syncTaskBean.add && checkData.syncTaskBean.add.length > 0) {
-                    existingTask = checkData.syncTaskBean.add.find((t: any) => t.id === taskId);
-                }
-            }
-
-            if (!existingTask) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Task with ID ${taskId} not found`,
-                        },
-                    ],
-                };
-            }
-
-            // Add the tag to the task
-            const now = new Date().toISOString();
-
-            // Create a new tags array if it doesn't exist
-            const currentTags = existingTask.tags || [];
-
-            // Check if the tag already exists
-            if (currentTags.includes(tagName)) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Tag "${tagName}" is already added to this task`,
-                        },
-                    ],
-                };
-            }
-
-            const updatedTask = {
-                ...existingTask,
-                tags: [...currentTags, tagName],
-                modifiedTime: now
-            };
-
-            const batchRequest = {
-                add: [],
-                update: [updatedTask],
-                delete: [],
-                addAttachments: [],
-                updateAttachments: [],
-                deleteAttachments: []
-            };
-
-            const response = await fetch(`${API_BASE_URL}/batch/task`, {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify(batchRequest),
-            });
-
-            if (!response.ok) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to add tag: ${response.statusText}`,
-                        },
-                    ],
-                };
-            }
-
-            const result = await response.json();
-
-            if (result.id2error && result.id2error[taskId]) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to add tag: ${result.id2error[taskId]}`,
-                        },
-                    ],
-                };
-            }
-
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Tag "${tagName}" added to task successfully`,
-                    },
-                ],
-            };
-        } catch (error) {
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Error adding tag: ${error instanceof Error ? error.message : String(error)}`,
-                    },
-                ],
-            };
-        }
-    }
-);
-
-server.tool(
-    "remove-tag-from-task",
-    "Remove a tag from a task",
-    {
-        taskId: z.string().describe("Task ID"),
-        tagName: z.string().min(1).describe("Tag name"),
-    },
-    async ({ taskId, tagName }) => {
-        try {
-            if (!accessToken) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: "Not authenticated. Please login first.",
-                        },
-                    ],
-                };
-            }
-
-            // First get all tasks to find the one we want to update
-            const checkResponse = await fetch(`${API_BASE_URL}/batch/check/0`, {
-                method: 'GET',
-                headers: getAuthHeaders(),
-            });
-
-            if (!checkResponse.ok) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to get tasks: ${checkResponse.statusText}`,
-                        },
-                    ],
-                };
-            }
-
-            const checkData = await checkResponse.json();
-
-            // Find the task in the response
-            let existingTask = null;
-
-            if (checkData.syncTaskBean && !checkData.syncTaskBean.empty) {
-                if (checkData.syncTaskBean.update && checkData.syncTaskBean.update.length > 0) {
-                    existingTask = checkData.syncTaskBean.update.find((t: any) => t.id === taskId);
-                }
-
-                if (!existingTask && checkData.syncTaskBean.add && checkData.syncTaskBean.add.length > 0) {
-                    existingTask = checkData.syncTaskBean.add.find((t: any) => t.id === taskId);
-                }
-            }
-
-            if (!existingTask) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Task with ID ${taskId} not found`,
-                        },
-                    ],
-                };
-            }
-
-            // Remove the tag from the task
-            const now = new Date().toISOString();
-
-            // Create a new tags array if it doesn't exist
-            const currentTags = existingTask.tags || [];
-
-            // Check if the tag exists
-            if (!currentTags.includes(tagName)) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Tag "${tagName}" is not on this task`,
-                        },
-                    ],
-                };
-            }
-
-            const updatedTask = {
-                ...existingTask,
-                tags: currentTags.filter((tag: string) => tag !== tagName),
-                modifiedTime: now
-            };
-
-            const batchRequest = {
-                add: [],
-                update: [updatedTask],
-                delete: [],
-                addAttachments: [],
-                updateAttachments: [],
-                deleteAttachments: []
-            };
-
-            const response = await fetch(`${API_BASE_URL}/batch/task`, {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify(batchRequest),
-            });
-
-            if (!response.ok) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to remove tag: ${response.statusText}`,
-                        },
-                    ],
-                };
-            }
-
-            const result = await response.json();
-
-            if (result.id2error && result.id2error[taskId]) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Failed to remove tag: ${result.id2error[taskId]}`,
-                        },
-                    ],
-                };
-            }
-
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Tag "${tagName}" removed from task successfully`,
-                    },
-                ],
-            };
-        } catch (error) {
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Error removing tag: ${error instanceof Error ? error.message : String(error)}`,
-                    },
-                ],
-            };
-        }
+            ]
+        };
     }
 );
 
