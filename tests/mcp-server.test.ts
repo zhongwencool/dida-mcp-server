@@ -280,6 +280,79 @@ describe('TickTick MCP Server', () => {
         }
       }
     );
+
+    server.tool(
+      'move-task',
+      'Move a task from one project to another',
+      {
+        taskId: jest.requireActual('zod').z.string(),
+        fromProjectId: jest.requireActual('zod').z.string(),
+        toProjectId: jest.requireActual('zod').z.string(),
+      },
+      async ({ taskId, fromProjectId, toProjectId }) => {
+        try {
+          const moveRequest = [
+            {
+              taskId,
+              fromProjectId,
+              toProjectId
+            }
+          ];
+
+          const response = await fetch('https://api.dida365.com/api/v2/batch/taskProject', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cookie': 't=mock-token',
+            },
+            body: JSON.stringify(moveRequest),
+          });
+
+          if (!response.ok) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Failed to move task: ${response.statusText}`,
+                },
+              ],
+            };
+          }
+
+          const result = await response.json();
+
+          // Check for errors in the response
+          if (result.id2error && Object.keys(result.id2error).length > 0) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Failed to move task: ${JSON.stringify(result.id2error)}`,
+                },
+              ],
+            };
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Task moved successfully from project ${fromProjectId} to project ${toProjectId}\\nResponse: ${JSON.stringify(result, null, 2)}`,
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Error moving task: ${error instanceof Error ? error.message : String(error)}`,
+              },
+            ],
+          };
+        }
+      }
+    );
   });
 
   describe('Authentication Tool', () => {
@@ -476,6 +549,52 @@ describe('TickTick MCP Server', () => {
 
       // Verify result
       expect(result.content[0].text).toBe(JSON.stringify(mockTaskResponse, null, 2));
+    });
+
+    test('move-task tool should move a task between projects', async () => {
+      // Mock response for move task
+      const mockMoveTaskResponse = {
+        id2etag: { 'task1': 'ybukfyon' },
+        id2error: {}
+      };
+
+      // Mock successful move task response
+      mockedFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockMoveTaskResponse
+      } as any);
+
+      // Get the tool handler
+      const handler = (server as any)._registeredTools['move-task'].callback;
+
+      // Call the handler
+      const result = await handler({
+        taskId: 'task1',
+        fromProjectId: 'project1',
+        toProjectId: 'project2'
+      });
+
+      // Verify fetch was called with correct arguments
+      expect(mockedFetch).toHaveBeenCalledWith(
+        'https://api.dida365.com/api/v2/batch/taskProject',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'Cookie': 't=mock-token'
+          }),
+          body: JSON.stringify([
+            {
+              taskId: 'task1',
+              fromProjectId: 'project1',
+              toProjectId: 'project2'
+            }
+          ])
+        })
+      );
+
+      // Verify result
+      expect(result.content[0].text).toContain('Task moved successfully');
+      expect(result.content[0].text).toContain('ybukfyon');
     });
   });
 });

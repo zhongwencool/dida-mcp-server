@@ -3,13 +3,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import fetch from 'node-fetch';
-import { 
-    API_BASE_URL, 
-    API_V2_BASE_URL, 
-    accessToken, 
-    v2AccessToken, 
-    inboxId, 
-    V2_HEADERS 
+import {
+    API_BASE_URL,
+    API_V2_BASE_URL,
+    accessToken,
+    v2AccessToken,
+    inboxId,
+    V2_HEADERS
 } from '../config';
 import { getAuthHeaders, getV2AuthHeaders } from '../auth/helpers';
 
@@ -584,6 +584,90 @@ export function registerTaskTools(server: McpServer) {
                         {
                             type: "text",
                             text: `Error deleting task: ${error instanceof Error ? error.message : String(error)}`,
+                        },
+                    ],
+                };
+            }
+        }
+    );
+
+    server.tool(
+        "move-task",
+        "Move a task from one project to another",
+        {
+            taskId: z.string().describe("Task ID to move"),
+            fromProjectId: z.string().describe("Source project ID"),
+            toProjectId: z.string().describe("Destination project ID"),
+        },
+        async ({ taskId, fromProjectId, toProjectId }) => {
+            try {
+                // Check if v2 token is available (required for this endpoint)
+                if (!v2AccessToken) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: "Not authenticated with v2 API. Please login with a v2 token first.",
+                            },
+                        ],
+                    };
+                }
+
+                // Prepare the request payload
+                const moveRequest = [
+                    {
+                        taskId: taskId,
+                        fromProjectId: fromProjectId,
+                        toProjectId: toProjectId
+                    }
+                ];
+
+                // Call the batch/taskProject endpoint
+                const response = await fetch(`${API_V2_BASE_URL}/batch/taskProject`, {
+                    method: 'POST',
+                    headers: getV2AuthHeaders(),
+                    body: JSON.stringify(moveRequest),
+                });
+
+                if (!response.ok) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Failed to move task: ${response.statusText}`,
+                            },
+                        ],
+                    };
+                }
+
+                const result = await response.json();
+
+                // Check for errors in the response
+                if (result.id2error && Object.keys(result.id2error).length > 0) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Failed to move task: ${JSON.stringify(result.id2error)}`,
+                            },
+                        ],
+                    };
+                }
+
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Task moved successfully from project ${fromProjectId} to project ${toProjectId}\nResponse: ${JSON.stringify(result, null, 2)}`,
+                        },
+                    ],
+                };
+            } catch (error) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Error moving task: ${error instanceof Error ? error.message : String(error)}`,
                         },
                     ],
                 };
