@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import fetch from 'node-fetch';
+import { v4 as uuidv4 } from 'uuid';
 
 // Mock dependencies
 jest.mock('node-fetch');
@@ -25,6 +26,13 @@ const mockProjectsResponse = [
     id: 'project2',
     name: 'Personal',
     color: '#00FF00',
+    viewMode: 'list',
+    kind: 'TASK'
+  },
+  {
+    id: 'inbox-project-id',
+    name: 'Inbox',
+    color: '#0000FF',
     viewMode: 'list',
     kind: 'TASK'
   }
@@ -379,6 +387,59 @@ describe('TickTick MCP Server', () => {
             'Authorization': 'Bearer mock-access-token'
           }),
           body: expect.stringContaining('New Task'),
+        })
+      );
+
+      // Verify result
+      expect(result.content[0].text).toContain('Task created successfully');
+    });
+
+    test('create-task tool should use Inbox project when no projectId is provided', async () => {
+      // Mock projects response to find Inbox
+      mockedFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockProjectsResponse
+      } as any);
+
+      // Mock successful task creation response
+      mockedFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ...mockCreatedTaskResponse,
+          projectId: 'inbox-project-id'
+        })
+      } as any);
+
+      // Get the tool handler
+      const handler = (server as any)._registeredTools['create-task'].callback;
+
+      // Call the handler without projectId
+      const result = await handler({
+        title: 'New Inbox Task',
+        content: 'New Inbox Task content',
+        priority: 0
+      });
+
+      // Verify first fetch was to get projects
+      expect(mockedFetch).toHaveBeenNthCalledWith(1,
+        'https://api.dida365.com/open/v1/project',
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer mock-access-token'
+          })
+        })
+      );
+
+      // Verify second fetch was to create task with inbox project ID
+      expect(mockedFetch).toHaveBeenNthCalledWith(2,
+        'https://api.dida365.com/open/v1/task',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer mock-access-token'
+          }),
+          body: expect.stringContaining('inbox-project-id'),
         })
       );
 

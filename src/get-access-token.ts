@@ -11,9 +11,22 @@ import { URL } from 'url';
 
 // Constants
 const OAUTH_BASE_URL = 'https://dida365.com/oauth';
+const API_V2_BASE_URL = 'https://api.dida365.com/api/v2';
 const CONFIG_FILE = path.join(process.env.HOME || process.env.USERPROFILE || '.', '.dida-mcp-config.json');
 const REDIRECT_URI = 'http://localhost:3000/oauth/callback';
 const PORT = 3000;
+
+// v2 API headers constants
+const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:123.0) Gecko/20100101 Firefox/123.0";
+const X_DEVICE = '{"platform":"web","os":"OS X","device":"Firefox 123.0","name":"unofficial api!","version":4531,' +
+  '"id":"6490' + require('crypto').randomBytes(10).toString('hex') + '","channel":"website","campaign":"","websocket":""}';
+
+// v2 API headers
+const V2_HEADERS = {
+  'User-Agent': USER_AGENT,
+  'x-device': X_DEVICE,
+  'Content-Type': 'application/json'
+};
 
 // Create readline interface for user input
 const rl = readline.createInterface({
@@ -152,21 +165,63 @@ async function getAccessToken(clientId: string, clientSecret: string, code: stri
   return await response.json();
 }
 
-// Function to save token to config file
-function saveTokenToConfig(tokenData: any): { config: any, expirationDate: Date } {
-  const expiresAt = Date.now() + (tokenData.expires_in * 1000);
-  const expirationDate = new Date(expiresAt);
+// Function to authenticate with username and password (v2 API)
+async function authenticateWithPassword(username: string, password: string): Promise<any> {
+  // Use v2 API for username/password authentication
+  const url = `${API_V2_BASE_URL}/user/signon?wc=true&remember=true`;
 
-  const config = {
-    access_token: tokenData.access_token,
-    refresh_token: tokenData.refresh_token,
-    expires_at: expiresAt,
-    token_type: tokenData.token_type
+  const userInfo = {
+    username: username,
+    password: password
   };
 
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
-  console.log(`\nToken saved to ${CONFIG_FILE}`);
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: V2_HEADERS,
+    body: JSON.stringify(userInfo)
+  });
 
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Authentication failed: ${response.status} ${response.statusText}\n${errorText}`);
+  }
+
+  return await response.json();
+}
+
+// Function to save token to config file
+function saveTokenToConfig(tokenData: any, isV2Token = false): { config: any, expirationDate: Date | null } {
+  // Load existing config if it exists
+  let config: Record<string, any> = {};
+  if (fs.existsSync(CONFIG_FILE)) {
+    try {
+      config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    } catch (error) {
+      console.error(`Error reading existing config: ${error instanceof Error ? error.message : String(error)}`);
+      // Continue with empty config if file exists but is invalid
+    }
+  }
+
+  let expirationDate: Date | null = null;
+
+  if (isV2Token) {
+    // For v2 API, we just store the token without expiration
+    config.v2_access_token = tokenData.token;
+    console.log(`\nV2 API token saved to ${CONFIG_FILE}`);
+  } else {
+    // For v1 API (OAuth), we store with expiration
+    const expiresAt = Date.now() + (tokenData.expires_in * 1000);
+    expirationDate = new Date(expiresAt);
+
+    config.access_token = tokenData.access_token;
+    config.refresh_token = tokenData.refresh_token;
+    config.expires_at = expiresAt;
+    config.token_type = tokenData.token_type;
+
+    console.log(`\nOAuth token saved to ${CONFIG_FILE}`);
+  }
+
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
   return { config, expirationDate };
 }
 
@@ -182,6 +237,17 @@ function displaySuccessPage(tokenData: any, expirationDate: Date): Promise<void>
 
       // Format the expiration date
       const formattedDate = expirationDate.toLocaleString();
+
+      // Get inboxId from config if available
+      let inboxId = null;
+      try {
+        if (fs.existsSync(CONFIG_FILE)) {
+          const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+          inboxId = config.inboxId;
+        }
+      } catch (error) {
+        console.error(`Error reading config for inboxId: ${error instanceof Error ? error.message : String(error)}`);
+      }
 
       // Create the MCP server configuration
       const mcpConfig = {
@@ -227,6 +293,7 @@ function displaySuccessPage(tokenData: any, expirationDate: Date): Promise<void>
               <p><strong>Token Type:</strong> ${tokenData.token_type}</p>
               <p><strong>Expires In:</strong> ${tokenData.expires_in} seconds</p>
               <p><strong>Expiration Date:</strong> ${formattedDate}</p>
+              ${inboxId ? `<p><strong>Inbox ID:</strong> ${inboxId}</p>` : ''}
             </div>
 
             <div>
@@ -291,38 +358,176 @@ function displaySuccessPage(tokenData: any, expirationDate: Date): Promise<void>
 // This is from a Node.js internal module being deprecated and is used by dependencies.
 // It doesn't affect functionality and can be safely ignored.
 
+
+
 // Main function
 async function main() {
   try {
-    console.log('TickTick OAuth Access Token Generator');
+    console.log('TickTick Access Token Generator');
     console.log('====================================\n');
 
+    // Get credentials for both authentication methods
+    console.log('Please provide credentials for both authentication methods:\n');
+
+    // Get username and password for v2 API
+    console.log('Username/Password Authentication (v2 API):');
+    const username = await prompt('Enter your TickTick username or email: ');
+    const password = await prompt('Enter your TickTick password: ');
+
+    // Get OAuth credentials for v1 API
+    console.log('\nOAuth Authentication (v1 API):');
     const clientId = await prompt('Enter your Client ID: ');
     const clientSecret = await prompt('Enter your Client Secret: ');
 
-    console.log('\nStarting OAuth authorization flow...');
+    // Authenticate with both methods
+    let v1Success = false;
+    let v2Success = false;
+    let v1TokenData = null;
+    let v2TokenData = null;
+    let v1ExpirationDate = null;
 
-    const authCode = await getAuthorizationCode(clientId);
-    console.log(`\nAuthorization code received: ${authCode.substring(0, 5)}...`);
+    // First try v2 API (username/password)
+    console.log('\nAuthenticating with Username/Password (v2 API)...');
+    try {
+      v2TokenData = await authenticateWithPassword(username, password);
 
-    console.log('\nExchanging authorization code for access token...');
-    const tokenData = await getAccessToken(clientId, clientSecret, authCode);
+      // Save the v2 token to config
+      saveTokenToConfig(v2TokenData, true);
 
-    const { expirationDate } = saveTokenToConfig(tokenData);
+      // Fetch inbox ID using v2 API
+      console.log('Fetching inbox ID from v2 API...');
+      try {
+        const batchCheckResponse = await fetch(`${API_V2_BASE_URL}/batch/check/0`, {
+          method: 'GET',
+          headers: {
+            ...V2_HEADERS,
+            'Cookie': `t=${v2TokenData.token}`
+          },
+        });
 
-    console.log('\nAccess token obtained successfully!');
-    console.log(`\nToken details:`);
-    console.log(`- Access token: ${tokenData.access_token.substring(0, 10)}...`);
-    console.log(`- Token type: ${tokenData.token_type}`);
-    console.log(`- Expires in: ${tokenData.expires_in} seconds`);
-    console.log(`- Expires on: ${expirationDate.toLocaleString()}`);
+        if (batchCheckResponse.ok) {
+          const data = await batchCheckResponse.json();
+          if (data.inboxId) {
+            // Load existing config
+            let config: Record<string, any> = {};
+            if (fs.existsSync(CONFIG_FILE)) {
+              config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+            }
 
-    console.log(`\nOpening browser to display token information and MCP configuration...`);
-    await displaySuccessPage(tokenData, expirationDate);
+            // Save inbox ID to config
+            config.inboxId = data.inboxId;
+            fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+            console.log(`✅ Inbox ID saved to config: ${data.inboxId}`);
+          }
+        } else {
+          console.error(`❌ Failed to fetch inbox ID: ${batchCheckResponse.statusText}`);
+        }
+      } catch (inboxError) {
+        console.error(`❌ Error fetching inbox ID: ${inboxError instanceof Error ? inboxError.message : String(inboxError)}`);
+      }
 
-    console.log(`\nTo use this token with the MCP server, run:`);
-    console.log(`npm run start`);
-    console.log(`The server will automatically detect and use your token.`);
+      console.log('✅ V2 API authentication successful!');
+      v2Success = true;
+    } catch (v2Error) {
+      console.error(`❌ V2 API authentication failed: ${v2Error instanceof Error ? v2Error.message : String(v2Error)}`);
+    }
+
+    // Then try v1 API (OAuth)
+    console.log('\nStarting OAuth authorization flow (v1 API)...');
+    try {
+      const authCode = await getAuthorizationCode(clientId);
+      console.log(`Authorization code received: ${authCode.substring(0, 5)}...`);
+
+      console.log('Exchanging authorization code for access token...');
+      v1TokenData = await getAccessToken(clientId, clientSecret, authCode);
+
+      const { expirationDate } = saveTokenToConfig(v1TokenData);
+      v1ExpirationDate = expirationDate;
+
+      if (!v1ExpirationDate) {
+        throw new Error('Failed to get expiration date for OAuth token');
+      }
+
+      console.log('✅ V1 API (OAuth) authentication successful!');
+      v1Success = true;
+    } catch (v1Error) {
+      console.error(`❌ V1 API (OAuth) authentication failed: ${v1Error instanceof Error ? v1Error.message : String(v1Error)}`);
+    }
+
+    // Display summary of authentication results
+    console.log('\n====================================');
+    console.log('Authentication Results:');
+    console.log('====================================');
+
+    // Get inboxId from config if available
+    let inboxId = null;
+    try {
+      if (fs.existsSync(CONFIG_FILE)) {
+        const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+        inboxId = config.inboxId;
+      }
+    } catch (error) {
+      console.error(`Error reading config for inboxId: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    if (v2Success) {
+      console.log('✅ V2 API (Username/Password): Authenticated');
+      console.log(`   Token: ${v2TokenData.token.substring(0, 10)}...`);
+    } else {
+      console.log('❌ V2 API (Username/Password): Failed');
+    }
+
+    if (v1Success && v1TokenData && v1ExpirationDate) {
+      console.log('✅ V1 API (OAuth): Authenticated');
+      console.log(`   Token: ${v1TokenData.access_token.substring(0, 10)}...`);
+      console.log(`   Expires: ${v1ExpirationDate.toLocaleString()}`);
+    } else {
+      console.log('❌ V1 API (OAuth): Failed');
+    }
+
+    if (inboxId) {
+      console.log(`✅ Inbox ID: ${inboxId}`);
+    } else {
+      console.log('❌ Inbox ID: Not found');
+    }
+
+    // Check if at least one authentication method succeeded
+    if (!v1Success && !v2Success) {
+      console.error('\n❌ Both authentication methods failed. Please check your credentials and try again.');
+      process.exit(1);
+    }
+
+    // Display MCP server configuration
+    console.log('\n====================================');
+    console.log('MCP Server Configuration:');
+    console.log('====================================');
+
+    // Get the absolute path to the dida-mcp-server directory
+    const currentDir = process.cwd();
+
+    // Create the MCP server configuration
+    const mcpConfig = {
+      mcpServers: {
+        dida: {
+          command: "node",
+          args: [
+            path.join(currentDir, "build/index.js")
+          ]
+        }
+      }
+    };
+
+    console.log(JSON.stringify(mcpConfig, null, 2));
+
+    console.log('\nTo use these tokens with the MCP server, run:');
+    console.log('npm run start');
+    console.log('The server will automatically detect and use your tokens.');
+
+    // If OAuth was successful, display the success page in browser
+    if (v1Success && v1TokenData && v1ExpirationDate) {
+      console.log('\nOpening browser to display OAuth token information...');
+      await displaySuccessPage(v1TokenData, v1ExpirationDate);
+    }
 
     rl.close();
   } catch (error) {
