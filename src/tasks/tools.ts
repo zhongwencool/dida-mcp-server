@@ -12,6 +12,7 @@ import {
     V2_HEADERS
 } from '../config';
 import { getAuthHeaders, getV2AuthHeaders } from '../auth/helpers';
+import { BatchTaskRequest, BatchTaskResponse, Task } from '../types';
 
 // Register task management tools
 export function registerTaskTools(server: McpServer) {
@@ -668,6 +669,348 @@ export function registerTaskTools(server: McpServer) {
                         {
                             type: "text",
                             text: `Error moving task: ${error instanceof Error ? error.message : String(error)}`,
+                        },
+                    ],
+                };
+            }
+        }
+    );
+
+    server.tool(
+        "batch-update-tasks",
+        "Updates multiple tasks in TickTick with new attributes in a single API call. This batch operation is more efficient than updating tasks individually. You can provide an array of tasks with their IDs and the attributes you want to update. Each task can have different update parameters. Returns a summary of successful updates and any errors encountered.",
+        {
+            tasks: z.array(z.object({
+                id: z.string().describe("The unique identifier of the task to update. This ID is assigned by TickTick when the task is created."),
+                projectId: z.string().describe("The unique identifier of the project containing the task."),
+                title: z.string().optional().describe("The new title for the task. If not provided, the existing title will be preserved."),
+                content: z.string().optional().describe("The new content/description for the task. If not provided, the existing content will be preserved."),
+                priority: z.number().min(0).max(5).optional().describe("The new priority level for the task (0=none, 1=low, 3=medium, 5=high). If not provided, the existing priority will be preserved."),
+                dueDate: z.string().optional().describe("The new due date for the task in ISO format (e.g., '2023-12-31T23:59:59Z'). If not provided, the existing due date will be preserved."),
+                startDate: z.string().optional().describe("The new start date for the task in ISO format. If not provided, the existing start date will be preserved."),
+                isAllDay: z.boolean().optional().describe("Whether the task is an all-day task. If not provided, the existing setting will be preserved."),
+                tags: z.string().optional().describe("Comma-separated list of tags for the task. If provided as an empty string, all tags will be removed. If not provided, existing tags will be preserved."),
+            })).min(1).describe("Array of tasks to update with their new attributes"),
+        },
+        async ({ tasks }) => {
+            try {
+                if (!accessToken) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: "Not authenticated. Please login first.",
+                            },
+                        ],
+                    };
+                }
+
+                // Process each task to prepare the update data
+                const updatePromises = tasks.map(async (taskUpdate) => {
+                    try {
+                        // First get the existing task to update
+                        const getResponse = await fetch(`${API_BASE_URL}/project/${taskUpdate.projectId}/task/${taskUpdate.id}`, {
+                            method: 'GET',
+                            headers: getAuthHeaders(),
+                        });
+
+                        if (!getResponse.ok) {
+                            return {
+                                id: taskUpdate.id,
+                                error: `Failed to get task: ${getResponse.statusText}`,
+                                success: false
+                            };
+                        }
+
+                        const existingTask = await getResponse.json();
+
+                        // Prepare the update data
+                        const updateData: any = {
+                            id: taskUpdate.id,
+                            projectId: taskUpdate.projectId,
+                            title: taskUpdate.title || existingTask.title,
+                            content: taskUpdate.content !== undefined ? taskUpdate.content : existingTask.content,
+                            priority: taskUpdate.priority !== undefined ? taskUpdate.priority : existingTask.priority,
+                            dueDate: taskUpdate.dueDate !== undefined ? taskUpdate.dueDate : existingTask.dueDate,
+                            startDate: taskUpdate.startDate !== undefined ? taskUpdate.startDate : existingTask.startDate,
+                            isAllDay: taskUpdate.isAllDay !== undefined ? taskUpdate.isAllDay : existingTask.isAllDay,
+                            timeZone: existingTask.timeZone || 'Asia/Shanghai',
+                        };
+
+                        // Handle tags if provided
+                        if (taskUpdate.tags !== undefined) {
+                            // Convert comma-separated string to array
+                            updateData.tags = taskUpdate.tags ? taskUpdate.tags.split(',').map(tag => tag.trim().replace(/^#/, '')) : [];
+                        } else if (existingTask.tags) {
+                            // Keep existing tags if not explicitly changed
+                            updateData.tags = existingTask.tags;
+                        }
+
+                        // Update the task
+                        const response = await fetch(`${API_BASE_URL}/task/${taskUpdate.id}`, {
+                            method: 'POST',
+                            headers: getAuthHeaders(),
+                            body: JSON.stringify(updateData),
+                        });
+
+                        if (!response.ok) {
+                            return {
+                                id: taskUpdate.id,
+                                error: `Failed to update task: ${response.statusText}`,
+                                success: false
+                            };
+                        }
+
+                        const updatedTask = await response.json();
+                        return {
+                            id: taskUpdate.id,
+                            task: updatedTask,
+                            success: true
+                        };
+                    } catch (error) {
+                        return {
+                            id: taskUpdate.id,
+                            error: `Error updating task: ${error instanceof Error ? error.message : String(error)}`,
+                            success: false
+                        };
+                    }
+                });
+
+                // Wait for all update operations to complete
+                const results = await Promise.all(updatePromises);
+
+                // Count successes and failures
+                const successCount = results.filter(r => r.success).length;
+                const failureCount = results.length - successCount;
+
+                // Format the response
+                let responseText = `Batch update completed: ${successCount} tasks updated successfully, ${failureCount} failed.\n\n`;
+
+                // Add details for successful updates
+                if (successCount > 0) {
+                    responseText += "Successfully updated tasks:\n";
+                    results.filter(r => r.success).forEach(result => {
+                        responseText += `- Task ID: ${result.id}\n`;
+                    });
+                    responseText += "\n";
+                }
+
+                // Add details for failures
+                if (failureCount > 0) {
+                    responseText += "Failed updates:\n";
+                    results.filter(r => !r.success).forEach(result => {
+                        responseText += `- Task ID: ${result.id}, Error: ${result.error}\n`;
+                    });
+                }
+
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: responseText,
+                        },
+                    ],
+                };
+            } catch (error) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Error in batch update: ${error instanceof Error ? error.message : String(error)}`,
+                        },
+                    ],
+                };
+            }
+        }
+    );
+
+    server.tool(
+        "batch-move-tasks",
+        "Moves multiple tasks between projects in a single operation. This batch operation is more efficient than moving tasks individually. You must specify the task IDs, source project IDs, and destination project IDs for each task. This operation preserves all task attributes while changing only their project associations. Requires v2 API authentication.",
+        {
+            moves: z.array(z.object({
+                taskId: z.string().describe("The unique identifier of the task to move. This ID is assigned by TickTick when the task is created."),
+                fromProjectId: z.string().describe("The unique identifier of the source project where the task is currently located."),
+                toProjectId: z.string().describe("The unique identifier of the destination project where the task should be moved to."),
+            })).min(1).describe("Array of task moves to perform"),
+        },
+        async ({ moves }) => {
+            try {
+                // Check if v2 token is available (required for this endpoint)
+                if (!v2AccessToken) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: "Not authenticated with v2 API. Please login with a v2 token first.",
+                            },
+                        ],
+                    };
+                }
+
+                // Prepare the request payload - the API already accepts an array
+                const moveRequest = moves.map(move => ({
+                    taskId: move.taskId,
+                    fromProjectId: move.fromProjectId,
+                    toProjectId: move.toProjectId
+                }));
+
+                // Call the batch/taskProject endpoint
+                const response = await fetch(`${API_V2_BASE_URL}/batch/taskProject`, {
+                    method: 'POST',
+                    headers: getV2AuthHeaders(),
+                    body: JSON.stringify(moveRequest),
+                });
+
+                if (!response.ok) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Failed to move tasks: ${response.statusText}`,
+                            },
+                        ],
+                    };
+                }
+
+                const result = await response.json();
+
+                // Check for errors in the response
+                const hasErrors = result.id2error && Object.keys(result.id2error).length > 0;
+
+                if (hasErrors) {
+                    let errorText = "Some tasks could not be moved:\n";
+                    for (const [taskId, error] of Object.entries(result.id2error)) {
+                        errorText += `- Task ID ${taskId}: ${error}\n`;
+                    }
+
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Batch move partially completed with errors:\n${errorText}`,
+                            },
+                        ],
+                    };
+                }
+
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Successfully moved ${moves.length} tasks to their new projects.`,
+                        },
+                    ],
+                };
+            } catch (error) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Error moving tasks: ${error instanceof Error ? error.message : String(error)}`,
+                        },
+                    ],
+                };
+            }
+        }
+    );
+
+    server.tool(
+        "batch-delete-tasks",
+        "Permanently removes multiple tasks from TickTick in a single operation. This batch operation is more efficient than deleting tasks individually. You must provide the task IDs and their project IDs. This action cannot be undone, and all task data will be permanently deleted. Use with caution.",
+        {
+            tasks: z.array(z.object({
+                id: z.string().describe("The unique identifier of the task to delete. This ID is assigned by TickTick when the task is created."),
+                projectId: z.string().describe("The unique identifier of the project containing the task."),
+            })).min(1).describe("Array of tasks to delete"),
+        },
+        async ({ tasks }) => {
+            try {
+                if (!accessToken) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: "Not authenticated. Please login first.",
+                            },
+                        ],
+                    };
+                }
+
+                // Process each task deletion
+                const deletePromises = tasks.map(async (task) => {
+                    try {
+                        // Delete the task using the delete endpoint
+                        const response = await fetch(`${API_BASE_URL}/project/${task.projectId}/task/${task.id}`, {
+                            method: 'DELETE',
+                            headers: getAuthHeaders(),
+                        });
+
+                        if (!response.ok) {
+                            return {
+                                id: task.id,
+                                projectId: task.projectId,
+                                error: `Task not found or could not be deleted: ${response.statusText}`,
+                                success: false
+                            };
+                        }
+
+                        return {
+                            id: task.id,
+                            projectId: task.projectId,
+                            success: true
+                        };
+                    } catch (error) {
+                        return {
+                            id: task.id,
+                            projectId: task.projectId,
+                            error: `Error deleting task: ${error instanceof Error ? error.message : String(error)}`,
+                            success: false
+                        };
+                    }
+                });
+
+                // Wait for all delete operations to complete
+                const results = await Promise.all(deletePromises);
+
+                // Count successes and failures
+                const successCount = results.filter(r => r.success).length;
+                const failureCount = results.length - successCount;
+
+                // Format the response
+                let responseText = `Batch delete completed: ${successCount} tasks deleted successfully, ${failureCount} failed.\n\n`;
+
+                // Add details for successful deletions
+                if (successCount > 0) {
+                    responseText += "Successfully deleted tasks:\n";
+                    results.filter(r => r.success).forEach(result => {
+                        responseText += `- Task ID: ${result.id} from project: ${result.projectId}\n`;
+                    });
+                    responseText += "\n";
+                }
+
+                // Add details for failures
+                if (failureCount > 0) {
+                    responseText += "Failed deletions:\n";
+                    results.filter(r => !r.success).forEach(result => {
+                        responseText += `- Task ID: ${result.id}, Project ID: ${result.projectId}, Error: ${result.error}\n`;
+                    });
+                }
+
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: responseText,
+                        },
+                    ],
+                };
+            } catch (error) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Error in batch delete: ${error instanceof Error ? error.message : String(error)}`,
                         },
                     ],
                 };
