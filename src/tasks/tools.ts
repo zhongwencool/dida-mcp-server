@@ -8,11 +8,9 @@ import {
     API_V2_BASE_URL,
     accessToken,
     v2AccessToken,
-    inboxId,
-    V2_HEADERS
+    inboxId
 } from '../config';
 import { getAuthHeaders, getV2AuthHeaders } from '../auth/helpers';
-import { BatchTaskRequest, BatchTaskResponse, Task } from '../types';
 
 // Register task management tools
 export function registerTaskTools(server: McpServer) {
@@ -320,10 +318,10 @@ export function registerTaskTools(server: McpServer) {
 
     server.tool(
         "update-task",
-        "Updates an existing task in TickTick with new attributes. You can modify any combination of title, content, priority, due date, start date, all-day status, and tags. Only the specified fields will be updated; others remain unchanged. Tags should be provided as a comma-separated list without # symbols. Returns the updated task with all its current attributes.",
+        "Updates an existing task in TickTick with new attributes. You must provide both the task ID and the project ID. You can modify any combination of title, content, priority, due date, start date, all-day status, and tags. Only the specified fields will be updated; others remain unchanged. Tags should be provided as a comma-separated list without # symbols. Returns the updated task with all its current attributes.",
         {
             id: z.string().describe("The unique identifier of the task to update. This ID is assigned by TickTick when the task is created."),
-            projectId: z.string().optional().describe("The unique identifier of the project containing the task. If not provided, the Inbox project will be used."),
+            projectId: z.string().describe("The unique identifier of the project containing the task."),
             title: z.string().min(1).max(200).optional().describe("New title for the task (1-200 characters). If not provided, the existing title will be kept."),
             content: z.string().max(2000).optional().describe("New detailed description or notes for the task (up to 2000 characters). If not provided, the existing content will be kept."),
             priority: z.number().min(0).max(5).optional().describe("New priority level: 0 (none), 1 (low), 3 (medium), 5 (high). If not provided, the existing priority will be kept."),
@@ -345,22 +343,7 @@ export function registerTaskTools(server: McpServer) {
                     };
                 }
 
-                // Use inbox if no project is specified
-                if (!projectId) {
-                    if (!inboxId) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: "Inbox ID not found. Please run login-with-token first or specify a project ID.",
-                                },
-                            ],
-                        };
-                    }
-
-                    // Use the stored inbox ID
-                    projectId = inboxId;
-                }
+                // Project ID is now required
 
                 // First get the task to update
                 const getResponse = await fetch(`${API_BASE_URL}/project/${projectId}/task/${id}`, {
@@ -520,10 +503,10 @@ export function registerTaskTools(server: McpServer) {
 
     server.tool(
         "delete-task",
-        "Permanently removes a task from TickTick. You must provide the task ID and optionally the project ID (defaults to Inbox if not specified). This action cannot be undone, and all task data including content, due dates, and tags will be permanently deleted. Use with caution.",
+        "Permanently removes a task from TickTick. You must provide both the task ID and the project ID. This action cannot be undone, and all task data including content, due dates, and tags will be permanently deleted. Use with caution.",
         {
             id: z.string().describe("The unique identifier of the task to delete. This ID is assigned by TickTick when the task is created."),
-            projectId: z.string().optional().describe("The unique identifier of the project containing the task. If not provided, the Inbox project will be used."),
+            projectId: z.string().describe("The unique identifier of the project containing the task."),
         },
         async ({ id, projectId }) => {
             try {
@@ -538,22 +521,7 @@ export function registerTaskTools(server: McpServer) {
                     };
                 }
 
-                // Use inbox if no project is specified
-                if (!projectId) {
-                    if (!inboxId) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: "Inbox ID not found. Please run login-with-token first or specify a project ID.",
-                                },
-                            ],
-                        };
-                    }
-
-                    // Use the stored inbox ID
-                    projectId = inboxId;
-                }
+                // Project ID is now required
 
                 // Delete the task using the delete endpoint
                 const response = await fetch(`${API_BASE_URL}/project/${projectId}/task/${id}`, {

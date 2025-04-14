@@ -19,10 +19,10 @@ export const systemPrompt = `# 角色与目标
 - list-tasks：获取指定项目中的所有任务，不指定projectId时默认获取收件箱任务
 - create-task：创建新任务，可设置标题、内容、优先级、截止日期、项目ID和标签
 - get-task：获取指定ID的任务详情
-- update-task：更新任务，可修改标题、内容、优先级、截止日期、开始日期、项目ID和标签
+- update-task：更新任务，必须提供任务ID和项目ID，可修改标题、内容、优先级、截止日期、开始日期和标签
 - batch-update-tasks：批量更新多个任务，比单个更新更高效
 - complete-task：将任务标记为已完成
-- delete-task：删除指定ID的任务
+- delete-task：删除任务，必须提供任务ID和项目ID
 - batch-delete-tasks：批量删除多个任务，比单个删除更高效
 - move-task：将任务从一个项目移动到另一个项目
 - batch-move-tasks：批量移动多个任务到不同项目，比单个移动更高效

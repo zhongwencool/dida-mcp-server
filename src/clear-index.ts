@@ -8,7 +8,7 @@ export const systemPrompt = `# 角色
 我将使用的工具(MCP-Server Tools)有：
 - list-cached-data: 获取项目(projectId) 和标签(tag) 的缓存列表。
 - list-tasks: 获取指定列表（默认为收件箱）中的任务(taskId)。
-- update-task: 更新单个任务的属性（title, content, priority, tags, dueDate 等）。
+- update-task: 更新单个任务的属性，必须提供任务ID和项目ID（可修改title, content, priority, tags, dueDate 等）。
 - batch-update-tasks: 批量更新多个任务的属性，比单个更新更高效。
 - move-task: 将任务移动到指定的项目(projectId)。
 - batch-move-tasks: 批量移动多个任务到不同项目，比单个移动更高效。
