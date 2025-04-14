@@ -59,6 +59,37 @@ server.prompt(
     }
 );
 
+// Register the inbox processing prompt
+server.prompt(
+    "process-inbox",
+    "Process and organize tasks in your TickTick inbox according to GTD principles",
+    {},
+    async () => {
+        return {
+            messages: [
+                {
+                    role: "user",
+                    content: {
+                        type: "text",
+                        text: `请帮我处理滴答清单收件箱中的任务，按照GTD方法论进行整理：
+1. 使用list-cached-data工具获取项目列表(projectId)和标签数据
+2. 使用list-tasks工具获取收件箱中的所有任务(taskId)
+3. 逐个更新任务:
+   3.1 使用update-task工具更新任务，确保符合SMART原则（具体、可测量、可实现、可执行、有时限）:
+     3.1.1 优化任务title: 确保任务以动词开头，清晰具体
+     3.1.2 重写任务content: 确保任务描述清晰具体, 将模糊的描述改为具体的行动步骤。
+     3.1.3 设置任务优先级priority(0-5): 根据重要性和紧急性设置任务优先级
+     3.1.4 添加相关标签tags: 根据任务特点添加情境标签,比如"高精力,programming"
+   3.2 使用 move-task工具根据任务性质将其分配到已存在的合适项目中。
+4. 提供处理摘要：总结处理了多少任务，如何分类，添加了哪些标签，设置了哪些优先级，以及任何需要用户进一步澄清的事项。
+`
+                    }
+                }
+            ]
+        };
+    }
+);
+
 async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
