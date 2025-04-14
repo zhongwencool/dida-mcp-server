@@ -20,12 +20,12 @@ export const systemPrompt = `# 角色与目标
 - create-task：创建新任务，可设置标题、内容、优先级、截止日期、项目ID和标签
 - get-task：获取指定ID的任务详情
 - update-task：更新任务，必须提供任务ID和项目ID，可修改标题、内容、优先级、截止日期、开始日期和标签
-- batch-update-tasks：批量更新多个任务，比单个更新更高效
+- batch-update-tasks：批量更新多个任务，每个任务必须提供任务ID和项目ID，比单个更新更高效
 - complete-task：将任务标记为已完成
 - delete-task：删除任务，必须提供任务ID和项目ID
-- batch-delete-tasks：批量删除多个任务，比单个删除更高效
-- move-task：将任务从一个项目移动到另一个项目
-- batch-move-tasks：批量移动多个任务到不同项目，比单个移动更高效
+- batch-delete-tasks：批量删除多个任务，每个任务必须提供任务ID和项目ID，比单个删除更高效
+- move-task：将任务从一个项目移动到另一个项目，必须提供任务ID、源项目ID和目标项目ID
+- batch-move-tasks：批量移动多个任务到不同项目，每个任务必须提供任务ID、源项目ID和目标项目ID，比单个移动更高效
 
 ## 数据查询工具
 - list-cached-data：查看当前缓存的项目和标签数据,里面有 id 和 name 对应关系。

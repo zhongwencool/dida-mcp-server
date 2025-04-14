@@ -646,7 +646,7 @@ export function registerTaskTools(server: McpServer) {
 
     server.tool(
         "batch-update-tasks",
-        "Updates multiple tasks in TickTick with new attributes in a single API call. This batch operation is more efficient than updating tasks individually. You can provide an array of tasks with their IDs and the attributes you want to update. Each task can have different update parameters. Returns a summary of successful updates and any errors encountered.",
+        "Updates multiple tasks in TickTick with new attributes in a single API call. This batch operation is more efficient than updating tasks individually. You must provide an array of tasks, where each task must include both the task ID and project ID. Each task can have different update parameters. Returns a summary of successful updates and any errors encountered.",
         {
             tasks: z.array(z.object({
                 id: z.string().describe("The unique identifier of the task to update. This ID is assigned by TickTick when the task is created."),
@@ -794,7 +794,7 @@ export function registerTaskTools(server: McpServer) {
 
     server.tool(
         "batch-move-tasks",
-        "Moves multiple tasks between projects in a single operation. This batch operation is more efficient than moving tasks individually. You must specify the task IDs, source project IDs, and destination project IDs for each task. This operation preserves all task attributes while changing only their project associations. Requires v2 API authentication.",
+        "Moves multiple tasks between projects in a single operation. This batch operation is more efficient than moving tasks individually. You must provide an array of moves, where each move must include the task ID, source project ID, and destination project ID. This operation preserves all task attributes while changing only their project associations. Requires v2 API authentication.",
         {
             moves: z.array(z.object({
                 taskId: z.string().describe("The unique identifier of the task to move. This ID is assigned by TickTick when the task is created."),
@@ -885,7 +885,7 @@ export function registerTaskTools(server: McpServer) {
 
     server.tool(
         "batch-delete-tasks",
-        "Permanently removes multiple tasks from TickTick in a single operation. This batch operation is more efficient than deleting tasks individually. You must provide the task IDs and their project IDs. This action cannot be undone, and all task data will be permanently deleted. Use with caution.",
+        "Permanently removes multiple tasks from TickTick in a single operation. This batch operation is more efficient than deleting tasks individually. You must provide an array of tasks, where each task must include both the task ID and project ID. This action cannot be undone, and all task data will be permanently deleted. Use with caution.",
         {
             tasks: z.array(z.object({
                 id: z.string().describe("The unique identifier of the task to delete. This ID is assigned by TickTick when the task is created."),

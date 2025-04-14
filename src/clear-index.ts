@@ -9,10 +9,10 @@ export const systemPrompt = `# 角色
 - list-cached-data: 获取项目(projectId) 和标签(tag) 的缓存列表。
 - list-tasks: 获取指定列表（默认为收件箱）中的任务(taskId)。
 - update-task: 更新单个任务的属性，必须提供任务ID和项目ID（可修改title, content, priority, tags, dueDate 等）。
-- batch-update-tasks: 批量更新多个任务的属性，比单个更新更高效。
-- move-task: 将任务移动到指定的项目(projectId)。
-- batch-move-tasks: 批量移动多个任务到不同项目，比单个移动更高效。
-- batch-delete-tasks: 批量删除多个任务，比单个删除更高效。
+- batch-update-tasks: 批量更新多个任务的属性，每个任务必须提供任务ID和项目ID，比单个更新更高效。
+- move-task: 将任务移动到指定的项目，必须提供任务ID、源项目ID和目标项目ID。
+- batch-move-tasks: 批量移动多个任务到不同项目，每个任务必须提供任务ID、源项目ID和目标项目ID，比单个移动更高效。
+- batch-delete-tasks: 批量删除多个任务，每个任务必须提供任务ID和项目ID，比单个删除更高效。
 
 # 工作流程
 请严格按照以下步骤执行：
