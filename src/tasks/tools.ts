@@ -17,9 +17,9 @@ import { getAuthHeaders, getV2AuthHeaders } from '../auth/helpers';
 export function registerTaskTools(server: McpServer) {
     server.tool(
         "list-tasks",
-        "List all tasks by project_id, default is inbox",
+        "Retrieves and displays all tasks from a specified project. If no project is provided, tasks from the default Inbox project will be shown. The response includes task details such as ID, title, content, due date, priority, tags, and completion status.",
         {
-            projectId: z.string().optional().describe("Filter tasks by project ID, default is inbox"),
+            projectId: z.string().optional().describe("The unique identifier of the project to list tasks from. If not provided, tasks from the default Inbox project will be shown."),
         },
         async ({ projectId }) => {
             try {
@@ -94,14 +94,14 @@ export function registerTaskTools(server: McpServer) {
 
     server.tool(
         "create-task",
-        "Create a new task",
+        "Creates a new task in TickTick with specified attributes. You can set title, content, priority (0-5), due date, project, and tags. If no project is specified, the task will be created in the Inbox. Tags should be provided as a comma-separated list without # symbols. Returns the created task details including its assigned ID.",
         {
-            title: z.string().min(1).max(200).describe("Task title"),
-            content: z.string().max(2000).optional().describe("Task content/description"),
-            priority: z.number().min(0).max(5).optional().describe("Task priority (0-5)"),
-            dueDate: z.string().datetime().optional().describe("Task due date (ISO format)"),
-            projectId: z.string().optional().describe("Project ID (defaults to Inbox project if not specified)"),
-            tags: z.string().optional().describe("Comma-separated list of tag names"),
+            title: z.string().min(1).max(200).describe("The title of the task (1-200 characters). This is the primary identifier visible in task lists."),
+            content: z.string().max(2000).optional().describe("Detailed description or notes for the task (up to 2000 characters). Supports plain text format."),
+            priority: z.number().min(0).max(5).optional().describe("Task priority level: 0 (none), 1 (low), 3 (medium), 5 (high). Default is 0 if not specified."),
+            dueDate: z.string().datetime().optional().describe("The deadline for the task in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.sssZ). If not specified, no due date will be set."),
+            projectId: z.string().optional().describe("The unique identifier of the project to add the task to. If not provided, the task will be created in the Inbox project."),
+            tags: z.string().optional().describe("Comma-separated list of tags to associate with the task (e.g., 'work,important,meeting'). Do not include # symbols."),
         },
         async ({ title, content, priority, dueDate, projectId, tags }) => {
             try {
@@ -146,7 +146,7 @@ export function registerTaskTools(server: McpServer) {
                 // Add tags if provided
                 if (tags) {
                     // Convert comma-separated string to array
-                    newTask.tags = tags.split(',').map(tag => tag.trim());
+                    newTask.tags = tags.split(',').map(tag => tag.trim().replace(/^#/, ''));
                 }
 
                 const response = await fetch(`${API_BASE_URL}/task`, {
@@ -191,9 +191,9 @@ export function registerTaskTools(server: McpServer) {
 
     server.tool(
         "complete-task",
-        "Mark a task as completed",
+        "Marks a task as completed in TickTick. This tool automatically finds the project containing the task, so you only need to provide the task ID. The task will be moved to the completed/archived section in TickTick and will no longer appear in active task lists. This action cannot be undone through the API.",
         {
-            id: z.string().describe("Task ID"),
+            id: z.string().describe("The unique identifier of the task to mark as completed. This ID is assigned by TickTick when the task is created."),
         },
         async ({ id }) => {
             try {
@@ -319,17 +319,17 @@ export function registerTaskTools(server: McpServer) {
 
     server.tool(
         "update-task",
-        "Update an existing task",
+        "Updates an existing task in TickTick with new attributes. You can modify any combination of title, content, priority, due date, start date, all-day status, and tags. Only the specified fields will be updated; others remain unchanged. Tags should be provided as a comma-separated list without # symbols. Returns the updated task with all its current attributes.",
         {
-            id: z.string().describe("Task ID"),
-            projectId: z.string().optional().describe("Project ID (defaults to Inbox project if not specified)"),
-            title: z.string().min(1).max(200).optional().describe("Task title"),
-            content: z.string().max(2000).optional().describe("Task content/description"),
-            priority: z.number().min(0).max(5).optional().describe("Task priority (0-5)"),
-            dueDate: z.string().datetime().optional().describe("Task due date (ISO format)"),
-            startDate: z.string().datetime().optional().describe("Task start date (ISO format)"),
-            isAllDay: z.boolean().optional().describe("Whether the task is an all-day task"),
-            tags: z.string().optional().describe("Comma-separated list of tag names"),
+            id: z.string().describe("The unique identifier of the task to update. This ID is assigned by TickTick when the task is created."),
+            projectId: z.string().optional().describe("The unique identifier of the project containing the task. If not provided, the Inbox project will be used."),
+            title: z.string().min(1).max(200).optional().describe("New title for the task (1-200 characters). If not provided, the existing title will be kept."),
+            content: z.string().max(2000).optional().describe("New detailed description or notes for the task (up to 2000 characters). If not provided, the existing content will be kept."),
+            priority: z.number().min(0).max(5).optional().describe("New priority level: 0 (none), 1 (low), 3 (medium), 5 (high). If not provided, the existing priority will be kept."),
+            dueDate: z.string().datetime().optional().describe("New deadline for the task in ISO 8601 format. To remove an existing due date, use an empty string."),
+            startDate: z.string().datetime().optional().describe("New start date for the task in ISO 8601 format. Useful for tasks that span multiple days or have a specific start time."),
+            isAllDay: z.boolean().optional().describe("Set to true for tasks that are all-day events without a specific time. Affects how due dates are displayed in TickTick."),
+            tags: z.string().optional().describe("New comma-separated list of tags (e.g., 'work,important,meeting'). Replaces all existing tags. To remove all tags, provide an empty string."),
         },
         async ({ id, projectId, title, content, priority, dueDate, startDate, isAllDay, tags }) => {
             try {
@@ -396,7 +396,7 @@ export function registerTaskTools(server: McpServer) {
                 // Handle tags if provided
                 if (tags !== undefined) {
                     // Convert comma-separated string to array
-                    updateData.tags = tags ? tags.split(',').map(tag => tag.trim()) : [];
+                    updateData.tags = tags ? tags.split(',').map(tag => tag.trim().replace(/^#/, '')) : [];
                 } else if (existingTask.tags) {
                     // Keep existing tags if not explicitly changed
                     updateData.tags = existingTask.tags;
@@ -444,10 +444,10 @@ export function registerTaskTools(server: McpServer) {
 
     server.tool(
         "get-task",
-        "Get a task by ID",
+        "Retrieves detailed information about a specific task by its ID. You must provide the project ID containing the task, or it will default to searching in the Inbox. The response includes all task attributes such as title, content, creation time, modification time, due date, priority, tags, completion status, and any custom fields.",
         {
-            id: z.string().describe("Task ID"),
-            projectId: z.string().optional().describe("Project ID (defaults to Inbox project if not specified)"),
+            id: z.string().describe("The unique identifier of the task to retrieve. This ID is assigned by TickTick when the task is created."),
+            projectId: z.string().optional().describe("The unique identifier of the project containing the task. If not provided, the Inbox project will be used."),
         },
         async ({ id, projectId }) => {
             try {
@@ -519,10 +519,10 @@ export function registerTaskTools(server: McpServer) {
 
     server.tool(
         "delete-task",
-        "Delete a task",
+        "Permanently removes a task from TickTick. You must provide the task ID and optionally the project ID (defaults to Inbox if not specified). This action cannot be undone, and all task data including content, due dates, and tags will be permanently deleted. Use with caution.",
         {
-            id: z.string().describe("Task ID"),
-            projectId: z.string().optional().describe("Project ID (defaults to Inbox project if not specified)"),
+            id: z.string().describe("The unique identifier of the task to delete. This ID is assigned by TickTick when the task is created."),
+            projectId: z.string().optional().describe("The unique identifier of the project containing the task. If not provided, the Inbox project will be used."),
         },
         async ({ id, projectId }) => {
             try {
@@ -593,11 +593,11 @@ export function registerTaskTools(server: McpServer) {
 
     server.tool(
         "move-task",
-        "Move a task from one project to another",
+        "Moves a task from one project to another in TickTick. You must specify the task ID, source project ID, and destination project ID. This tool preserves all task attributes including title, content, due date, priority, and tags while changing only its project association. This operation requires v2 API authentication.",
         {
-            taskId: z.string().describe("Task ID to move"),
-            fromProjectId: z.string().describe("Source project ID"),
-            toProjectId: z.string().describe("Destination project ID"),
+            taskId: z.string().describe("The unique identifier of the task to move. This ID is assigned by TickTick when the task is created."),
+            fromProjectId: z.string().describe("The unique identifier of the source project where the task is currently located."),
+            toProjectId: z.string().describe("The unique identifier of the destination project where the task should be moved to."),
         },
         async ({ taskId, fromProjectId, toProjectId }) => {
             try {
