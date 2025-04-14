@@ -1,341 +1,212 @@
-# 滴答清单 MCP Server (Dida MCP Server)
+# Dida MCP Server
 
-一个用于滴答清单（TickTick）的 Model Context Protocol (MCP) 服务器，提供项目、任务和标签管理功能。该服务器与官方滴答清单 API 集成，通过 MCP 工具提供无缝的任务管理体验。
+A Model Context Protocol (MCP) server for interacting with TickTick/Dida365 task management service. This server provides tools to manage tasks, projects, and tags through the TickTick API.
 
-## 功能特点
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 
-- **OAuth认证**：使用安全的OAuth访问令牌登录到您的滴答清单账户
-- **项目管理**：列出、创建、更新和删除项目
-- **任务管理**：列出、创建、完成和删除任务
-- **标签管理**：在创建或更新任务时添加标签
-- **MCP 集成**：通过 MCP 工具暴露所有功能
+## Overview
 
-## 系统要求
+Dida MCP Server is built on the [Model Context Protocol](https://modelcontextprotocol.io/) framework, enabling AI assistants to interact with your TickTick/Dida365 account. It provides a comprehensive set of tools for task and project management, allowing AI assistants to help organize your tasks according to GTD (Getting Things Done) principles.
 
-- Node.js 18.x 或更高版本
-- npm 或 yarn
-- 滴答清单账户
+## Features
 
-## 安装
+- **Authentication**: OAuth-based authentication with TickTick/Dida365 API
+- **Task Management**: Create, read, update, delete, and move tasks
+- **Project Management**: Create, read, update, and delete projects
+- **Batch Operations**: Efficiently manage multiple tasks at once
+- **GTD Assistant**: Built-in system prompt for GTD-based task organization
+- **Cached Data**: Efficient caching of projects and tags data
+
+## Prerequisites
+
+- Node.js (v16 or higher)
+- npm (v7 or higher)
+- TickTick/Dida365 account
+- Client ID and Client Secret from [Dida365 Developer Center](https://developer.dida365.com/manage) (for OAuth authentication)
+
+## Installation
 
 ```bash
-# 克隆仓库
+# Clone the repository
 git clone https://github.com/yourusername/dida-mcp-server.git
 cd dida-mcp-server
 
-# 安装依赖
+# Install dependencies
 npm install
-```
 
-## 构建
-
-```bash
-# 构建 TypeScript 代码
+# Build the project
 npm run build
 ```
 
-## 运行
+## Authentication
 
-### 使用 OAuth 访问令牌认证
+Before using the server, you need to authenticate with TickTick/Dida365. The server supports two authentication methods:
 
-滴答清单使用 OAuth 2.0 访问令牌进行认证。这是一种安全的认证方式，不需要在客户端中存储您的密码。
+1. **OAuth Authentication (V1 API)**: Uses the Dida365 Open API with OAuth tokens
+2. **Username/Password Authentication (V2 API)**: Uses the internal API with session tokens
+
+### Using get-access-token
+
+The `get-access-token.ts` script handles the authentication process for both API versions. To use it:
 
 ```bash
-# 第一步：构建项目
-npm run build
-
-# 第二步：获取访问令牌
 npm run get-token
-
-# 第三步：启动服务器
-npm start
 ```
 
-然后使用 `login-with-token` 工具完成认证。
+The script will:
 
-#### OAuth 授权流程
+1. Prompt you for your TickTick/Dida365 username and password (for V2 API)
+2. Prompt you for your [Client ID and Client Secret](https://developer.dida365.com/manage) ([for V1 API OAuth])
+3. Start a local server on port 3000 to handle the OAuth callback
+4. Open your browser to authorize the application
+5. Exchange the authorization code for an access token
+6. Store both tokens in the configuration file at `~/.dida-mcp-config.json`
+7. Display a success page with token information and MCP server configuration
 
-当您运行 `npm run get-token` 时，程序会：
+#### Prerequisites for OAuth Authentication
 
-1. 要求您输入 Client ID 和 Client Secret
-2. 启动一个本地 HTTP 服务器（在端口 3000 上）来接收授权回调
-3. 自动打开浏览器，将您定向到滴答清单的授权页面
-4. 当您授权应用后，滴答清单会将您重定向到本地服务器，并自动捕获授权码
-5. 使用授权码获取访问令牌
-6. 将访问令牌保存到配置文件中（`~/.dida-mcp-config.json`）
+To use OAuth authentication, you need to:
 
-整个过程是自动化的，您只需要在浏览器中授权应用。
+1. Register your application in the Dida365 Developer Center
+2. Set your redirect URI to `http://localhost:3000/oauth/callback`
+3. Obtain a Client ID and Client Secret
 
-#### 获取 Client ID 和 Client Secret
+#### Configuration File
 
-要获取 Client ID 和 Client Secret，您需要在滴答清单开发者平台上创建一个应用：
-
-1. 访问 [https://developer.dida365.com/](https://developer.dida365.com/)
-2. 注册并登录
-3. 创建一个新应用
-4. 在应用设置中，添加重定向 URI：`http://localhost:3000/oauth/callback`
-5. 获取 Client ID 和 Client Secret
-
-## MCP 服务器配置
-
-### 服务器设置
-
-服务器使用 `@modelcontextprotocol/sdk` 包创建，主要配置如下：
-
-```typescript
-// 创建服务器实例
-const server = new McpServer({
-  name: "dida-mcp-server",
-  version: "1.0.0",
-  capabilities: {
-    resources: {},
-    tools: {},
-  },
-});
-
-// 连接到标准输入/输出传输
-async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Dida MCP Server running on stdio");
-  console.error("Use the 'login' tool to authenticate with TickTick before using other tools");
-}
-```
-
-### 环境变量
-
-服务器不需要任何环境变量，但您可以根据需要添加以下可选环境变量：
-
-- `DEBUG=1`：启用调试日志
-- `API_BASE_URL`：自定义 API 基础 URL（默认为 `https://api.dida365.com/api/v2`）
-
-### 与其他 MCP 客户端集成
-
-滴答清单 MCP 服务器完全兼容标准的 MCP 配置方式。您可以通过以下两种方式之一使用它：
-
-#### 方式一：使用 MCP 配置文件（推荐）
-
-在您的 MCP 客户端配置文件（通常是 `.mcp.json`）中添加以下配置：
-
-##### 使用 OAuth 访问令牌认证
+The authentication process creates a configuration file at `~/.dida-mcp-config.json` with the following structure:
 
 ```json
 {
-    "mcpServers": {
-        "dida": {
-            "command": "node",
-            "args": [
-                "/ABSOLUTE/PATH/TO/PARENT/FOLDER/dida-mcp-server/build/index.js"
-            ]
-        }
-    }
+  "access_token": "your-v1-oauth-token",
+  "refresh_token": "your-refresh-token",
+  "expires_at": 1234567890000,
+  "token_type": "bearer",
+  "v2_access_token": "your-v2-session-token",
+  "inboxId": "your-inbox-project-id"
 }
 ```
 
-请将路径替换为您系统上的实际路径。这样配置后，您可以直接在 MCP 客户端中使用 `dida` 服务器。
+This file is automatically detected and used by the server when it starts.
 
-##### 在不同客户端中使用示例
+## Usage
 
-###### Claude
+### Starting the Server
 
-如果您使用 Claude，可以在 `~/.config/anthropic/claude.json` 文件中添加以下配置：
+```bash
+npm start
+```
 
-**使用 OAuth 访问令牌认证：**
+The server will automatically attempt to authenticate using stored tokens and display the authentication status.
+
+### Connecting with an MCP Client
+
+You can connect to the server using any MCP-compatible client. The server provides a configuration that can be added to your MCP client configuration:
 
 ```json
 {
   "mcpServers": {
-    "dida-oauth": {
+    "dida": {
       "command": "node",
       "args": [
-        "/Users/yourusername/path/to/dida-mcp-server/build/index.js"
+        "/path/to/dida-mcp-server/build/index.js"
       ]
     }
   }
 }
 ```
 
-然后在 Claude 中使用以下命令来调用滴答清单服务器：
+## Available Tools
 
-```
-/mcp dida-oauth  # OAuth 访问令牌认证
-```
+### Authentication Tools
 
-###### OpenAI GPT
+- `check-auth-status`: Check the current authentication status
 
-如果您使用 OpenAI 的 GPT，可以在 `.mcp.json` 文件中添加类似的配置，然后使用 OpenAI 的 Actions 功能来集成。
+### Project Management Tools
 
-在 OpenAI 的 GPT 中，您可以创建一个自定义 GPT，并在其中添加滴答清单 MCP 服务器作为一个 Action。
+- `list-projects`: Get all projects
+- `create-project`: Create a new project
+- `update-project`: Update an existing project
+- `delete-project`: Delete a project
+- `refresh-project-cache`: Manually refresh the project cache
 
-###### Augment
+### Task Management Tools
 
-如果您使用 Augment，可以在 Augment 的配置中添加滴答清单 MCP 服务器。在 Augment 的设置中，导航到 MCP 服务器部分，然后添加滴答清单服务器的配置。
+- `list-tasks`: Get tasks from a project (defaults to inbox)
+- `create-task`: Create a new task
+- `get-task`: Get a specific task by ID
+- `update-task`: Update a task
+- `batch-update-tasks`: Update multiple tasks at once
+- `complete-task`: Mark a task as completed
+- `delete-task`: Delete a task
+- `batch-delete-tasks`: Delete multiple tasks at once
+- `move-task`: Move a task to a different project
+- `batch-move-tasks`: Move multiple tasks to different projects
 
-这将启动滴答清单 MCP 服务器并将其连接到您的 AI 助手。然后您可以要求助手使用滴答清单的功能，例如：“请登录我的滴答清单账户并列出我的所有项目”。
+### Data Query Tools
 
-#### 方式二：手动启动服务器
+- `list-cached-data`: View cached projects and tags data
 
-如果您想手动启动服务器，可以按照以下步骤操作：
+## System Prompts
 
-1. 启动服务器：`npm start`
-2. 将服务器的标准输入/输出连接到客户端
-3. 使用客户端调用服务器提供的工具
+The server includes two built-in prompts:
 
-## API 参考
+1. **GTD Assistant Prompt**: A system prompt that provides guidance on using the tools to implement GTD methodology
+2. **Process Inbox Prompt**: A user-level prompt that helps organize tasks in the inbox according to GTD principles
 
-服务器暴露以下 MCP 工具：
+## Development
 
-### 认证
-
-| 工具 | 描述 | 参数 |
-|------|-------------|------------|
-| `login-with-token` | 使用 OAuth 访问令牌登录到滴答清单 | 无（需要先运行 `npm run get-token` 并使用 `--token-auth` 启动服务器） |
-
-### 项目管理
-
-| 工具 | 描述 | 参数 |
-|------|-------------|------------|
-| `list-projects` | 列出所有项目 | 无 |
-| `create-project` | 创建新项目 | `name`: 项目名称<br>`color`: (可选) 项目颜色（十六进制格式） |
-| `update-project` | 更新现有项目 | `id`: 项目 ID<br>`name`: (可选) 项目名称<br>`color`: (可选) 项目颜色（十六进制格式） |
-| `delete-project` | 删除项目 | `id`: 项目 ID |
-
-### 任务管理
-
-| 工具 | 描述 | 参数 |
-|------|-------------|------------|
-| `list-tasks` | 列出所有任务 | `projectId`: (可选) 按项目 ID 筛选任务 |
-| `create-task` | 创建新任务 | `title`: 任务标题<br>`content`: (可选) 任务内容/描述<br>`priority`: (可选) 任务优先级 (0-5)<br>`dueDate`: (可选) 任务截止日期 (ISO 格式)<br>`projectId`: (可选) 项目 ID<br>`tags`: (可选) 逗号分隔的标签列表 |
-| `update-task` | 更新现有任务 | `id`: 任务 ID<br>`projectId`: 项目 ID<br>`title`: (可选) 任务标题<br>`content`: (可选) 任务内容/描述<br>`priority`: (可选) 任务优先级 (0-5)<br>`dueDate`: (可选) 任务截止日期 (ISO 格式)<br>`startDate`: (可选) 任务开始日期 (ISO 格式)<br>`isAllDay`: (可选) 是否为全天任务<br>`tags`: (可选) 逗号分隔的标签列表 |
-| `complete-task` | 将任务标记为已完成 | `id`: 任务 ID |
-| `delete-task` | 删除任务 | `id`: 任务 ID<br>`projectId`: 项目 ID |
-
-### 标签管理
-
-标签管理功能已集成到任务创建和更新工具中。在创建或更新任务时，可以使用 `tags` 参数指定逗号分隔的标签列表。
-
-## 技术实现细节
-
-### 项目结构
-
-```
-dida-mcp-server/
-├── src/
-│   ├── index.ts         # 主服务器实现
-│   └── types/
-│       └── index.ts     # 类型定义
-├── tests/
-│   ├── mcp-server.test.ts      # MCP 服务器测试
-│   └── ticktick-api.test.ts    # 滴答清单 API 测试
-├── package.json
-├── tsconfig.json
-├── jest.config.js
-└── README.md
-```
-
-### 依赖项
-
-主要依赖项包括：
-
-- `@modelcontextprotocol/sdk`: MCP 服务器实现
-- `node-fetch`: 用于 HTTP 请求
-- `uuid`: 生成唯一 ID
-- `zod`: 参数验证
-
-### 实现注意事项
-
-- 服务器直接与官方滴答清单 API 集成
-- 在使用其他工具之前需要进行身份验证
-- 所有数据都存储在您的滴答清单账户中
-- 通过 MCP 服务器进行的更改将反映在滴答清单应用程序中
-- 服务器使用标准输入/输出进行通信，便于与其他 MCP 客户端集成
-- 服务器使用特定的请求头（User-Agent 和 x-device）模拟浏览器行为，确保与滴答清单 API 的兼容性
-
-## 使用示例
-
-以下是如何使用 MCP 服务器与客户端的示例：
-
-```typescript
-// 登录到滴答清单
-await client.callTool("login", {
-  username: "your-username",
-  password: "your-password"
-});
-
-// 创建项目
-const projectResult = await client.callTool("create-project", {
-  name: "工作任务",
-  color: "#FF0000"
-});
-
-const project = JSON.parse(projectResult.content[0].text.split("\n")[1]);
-
-// 在项目中创建带有标签的任务
-await client.callTool("create-task", {
-  title: "完成季度报告",
-  content: "完成第三季度财务报告",
-  priority: 3,
-  dueDate: "2023-10-15T00:00:00Z",
-  projectId: project.id,
-  tags: "紧急,工作"
-});
-
-// 列出项目中的所有任务
-const tasksResult = await client.callTool("list-tasks", {
-  projectId: project.id
-});
-
-const tasks = JSON.parse(tasksResult.content[0].text);
-const task = tasks[0];
-
-// 更新任务并添加标签
-await client.callTool("update-task", {
-  id: task.id,
-  projectId: task.projectId,
-  title: task.title + " (已更新)",
-  priority: 5,
-  tags: "紧急,重要,季度报告"
-});
-
-console.log(tasksResult.content[0].text);
-```
-
-## 测试
+### Running in Development Mode
 
 ```bash
-# 运行所有测试
-npm test
+npm run dev
+```
 
-# 以监视模式运行测试
+This will start the server in watch mode, automatically recompiling and restarting when changes are made.
+
+### Running Tests
+
+```bash
+npm test
+```
+
+Or to run tests in watch mode:
+
+```bash
 npm run test:watch
 ```
 
-测试使用 Jest 框架，并模拟 API 调用以避免实际的网络请求。
+## Project Structure
 
-## 故障排除
-
-### 常见问题
-
-1. **认证失败**：确保您的用户名和密码正确。如果使用第三方登录，您需要在滴答清单网站上设置密码。
-
-2. **API 限制**：滴答清单 API 可能有请求限制，如果遇到 429 错误，请减少请求频率。
-
-3. **连接问题**：确保您的网络可以访问 `api.dida365.com`。
-
-### 调试
-
-启用调试日志以获取更多信息：
-
-```bash
-DEBUG=1 npm start
+```
+├── src/
+│   ├── auth/           # Authentication-related code
+│   ├── projects/       # Project management tools
+│   ├── resources/      # Resource definitions (cached data)
+│   ├── tasks/          # Task management tools
+│   ├── types/          # TypeScript type definitions
+│   ├── utils/          # Utility functions
+│   ├── config.ts       # Configuration management
+│   ├── get-access-token.ts  # Token acquisition script
+│   ├── index.ts        # Main server entry point
+│   └── systemPrompt.ts # GTD assistant system prompt
+├── tests/              # Test files
+├── package.json        # Project metadata and dependencies
+└── tsconfig.json      # TypeScript configuration
 ```
 
-## 参考资料
+## API Documentation
 
-本实现基于以下滴答清单 API 文档：
-- [GalaxyXieyu/dida_api](https://github.com/GalaxyXieyu/dida_api)
-- [luke1879012/dida_api](https://github.com/luke1879012/dida_api)
+This project uses the Dida365 Open API. For more information, see the [Dida365 Open API Documentation](./Dida365%20Open%20API.md).
 
-## 许可证
+## License
 
 ISC
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Acknowledgements
+
+- [Model Context Protocol](https://modelcontextprotocol.io/) for the MCP framework
+- [TickTick/Dida365](https://dida365.com/) for the task management service
