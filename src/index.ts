@@ -128,7 +128,12 @@ async function main() {
         try {
             const result = await authenticateWithStoredTokens();
             if (result.content && result.content.length > 0 && result.content[0].text) {
-                console.error(result.content[0].text);
+                try {
+                    const jsonResponse = JSON.parse(result.content[0].text);
+                    console.error(jsonResponse.message || 'Authentication completed successfully');
+                } catch (e) {
+                    console.error(result.content[0].text);
+                }
             }
             console.error("\n✨ Server is ready to use! Connect with your MCP client to begin.");
         } catch (error) {

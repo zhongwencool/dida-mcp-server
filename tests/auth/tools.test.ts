@@ -1,6 +1,7 @@
 import { registerAuthTools } from '../../src/auth/tools';
 import { authenticateWithStoredTokens } from '../../src/auth/helpers';
 import * as config from '../../src/config';
+import { parseJsonResponse } from '../utils';
 
 // Mock the config module
 jest.mock('../../src/config', () => {
@@ -90,12 +91,13 @@ describe('Auth Tools', () => {
 
     // Verify the result
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toContain('Authentication Status');
-    expect(result.content[0].text).toContain('✅ V1 API (OAuth): Authenticated');
-    expect(result.content[0].text).toContain('✅ V2 API: Authenticated');
-    expect(result.content[0].text).toContain('Projects: 1');
-    expect(result.content[0].text).toContain('Tags: 1');
-    expect(result.content[0].text).toContain('Inbox ID: inbox1');
+    const jsonResponse = parseJsonResponse(result.content[0].text);
+    expect(jsonResponse.success).toBe(true);
+    expect(jsonResponse.data.v1Api.authenticated).toBe(true);
+    expect(jsonResponse.data.v2Api.authenticated).toBe(true);
+    expect(jsonResponse.data.cachedData.projects).toBe(1);
+    expect(jsonResponse.data.cachedData.tags).toBe(1);
+    expect(jsonResponse.data.cachedData.inboxId).toBe('inbox1');
   });
 
   it('should handle list-cached-data tool execution', async () => {
@@ -111,11 +113,13 @@ describe('Auth Tools', () => {
 
     // Verify the result
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toContain('Inbox ID: inbox1');
-    expect(result.content[0].text).toContain('Cached Projects (1)');
-    expect(result.content[0].text).toContain('Project 1');
-    expect(result.content[0].text).toContain('Cached Tags (1)');
-    expect(result.content[0].text).toContain('tag1');
+    const jsonResponse = parseJsonResponse(result.content[0].text);
+    expect(jsonResponse.success).toBe(true);
+    expect(jsonResponse.data.inboxId).toBe('inbox1');
+    expect(jsonResponse.data.projects.length).toBe(1);
+    expect(jsonResponse.data.projects[0].name).toBe('Project 1');
+    expect(jsonResponse.data.tags.length).toBe(1);
+    expect(jsonResponse.data.tags[0].name).toBe('tag1');
   });
 
   it('should handle authenticate tool execution', async () => {
@@ -134,7 +138,9 @@ describe('Auth Tools', () => {
 
     // Verify the result
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toBe('Authentication successful');
+    const jsonResponse = parseJsonResponse(result.content[0].text);
+    expect(jsonResponse.success).toBe(true);
+    expect(jsonResponse.message).toBe('Authentication successful');
   });
 
   it('should handle error in authenticate tool', async () => {
@@ -153,7 +159,9 @@ describe('Auth Tools', () => {
 
     // Verify the result contains error message
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toContain('Authentication error: Auth error');
+    const jsonResponse = parseJsonResponse(result.content[0].text);
+    expect(jsonResponse.success).toBe(false);
+    expect(jsonResponse.error).toContain('Auth error');
   });
 
   it('should handle not authenticated case in list-cached-data', async () => {
@@ -175,7 +183,9 @@ describe('Auth Tools', () => {
 
     // Verify the result
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toBe('Not authenticated. Please login first.');
+    const jsonResponse = parseJsonResponse(result.content[0].text);
+    expect(jsonResponse.success).toBe(false);
+    expect(jsonResponse.message).toBe('Not authenticated. Please login first.');
 
     // Restore tokens
     config.setAuthTokens(originalV1Token, config.isOAuthAuth, originalV2Token, originalInboxId);

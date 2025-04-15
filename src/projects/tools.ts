@@ -6,6 +6,7 @@ import fetch from 'node-fetch';
 import { API_BASE_URL, accessToken } from '../config';
 import { getAuthHeaders } from '../auth/helpers';
 import { updateProjectCache } from '../resources/cached-data';
+import { createJsonResponse, createJsonErrorResponse } from '../utils/response';
 
 // Register project management tools
 export function registerProjectTools(server: McpServer) {
@@ -17,46 +18,18 @@ export function registerProjectTools(server: McpServer) {
         async () => {
             try {
                 if (!accessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated. Please login first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated. Please login first.");
                 }
 
                 const success = await updateProjectCache();
 
                 if (success) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Project cache refreshed successfully.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse({ refreshed: true }, true, "Project cache refreshed successfully.");
                 } else {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Failed to refresh project cache. Check server logs for details.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse({ refreshed: false }, false, "Failed to refresh project cache. Check server logs for details.");
                 }
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error refreshing project cache: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error refreshing project cache");
             }
         }
     );
@@ -67,14 +40,7 @@ export function registerProjectTools(server: McpServer) {
         async () => {
             try {
                 if (!accessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated. Please login first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated. Please login first.");
                 }
 
                 const response = await fetch(`${API_BASE_URL}/project`, {
@@ -83,14 +49,7 @@ export function registerProjectTools(server: McpServer) {
                 });
 
                 if (!response.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to get projects: ${response.statusText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to get projects: ${response.statusText}`);
                 }
 
                 const projects = await response.json();
@@ -98,23 +57,9 @@ export function registerProjectTools(server: McpServer) {
                 // Update the project cache
                 await updateProjectCache();
 
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: JSON.stringify(projects, null, 2),
-                        },
-                    ],
-                };
+                return createJsonResponse(projects);
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error listing projects: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error listing projects");
             }
         }
     );
@@ -129,14 +74,7 @@ export function registerProjectTools(server: McpServer) {
         async ({ name, color }) => {
             try {
                 if (!accessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated. Please login first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated. Please login first.");
                 }
 
                 const newProject = {
@@ -153,14 +91,7 @@ export function registerProjectTools(server: McpServer) {
                 });
 
                 if (!response.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to create project: ${response.statusText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to create project: ${response.statusText}`);
                 }
 
                 const project = await response.json();
@@ -168,23 +99,9 @@ export function registerProjectTools(server: McpServer) {
                 // Update the project cache after creating a new project
                 await updateProjectCache();
 
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Project created successfully:\n${JSON.stringify(project, null, 2)}`,
-                        },
-                    ],
-                };
+                return createJsonResponse(project, true, "Project created successfully");
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error creating project: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error creating project");
             }
         }
     );
@@ -200,14 +117,7 @@ export function registerProjectTools(server: McpServer) {
         async ({ id, name, color }) => {
             try {
                 if (!accessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated. Please login first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated. Please login first.");
                 }
 
                 const updateData: any = {};
@@ -221,35 +131,17 @@ export function registerProjectTools(server: McpServer) {
                 });
 
                 if (!response.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to update project: ${response.statusText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to update project: ${response.statusText}`);
                 }
 
                 const project = await response.json();
 
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Project updated successfully:\n${JSON.stringify(project, null, 2)}`,
-                        },
-                    ],
-                };
+                // Update the project cache after updating a project
+                await updateProjectCache();
+
+                return createJsonResponse(project, true, "Project updated successfully");
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error updating project: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error updating project");
             }
         }
     );
@@ -263,14 +155,7 @@ export function registerProjectTools(server: McpServer) {
         async ({ id }) => {
             try {
                 if (!accessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated. Please login first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated. Please login first.");
                 }
 
                 const response = await fetch(`${API_BASE_URL}/project/${id}`, {
@@ -279,36 +164,15 @@ export function registerProjectTools(server: McpServer) {
                 });
 
                 if (!response.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to delete project: ${response.statusText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to delete project: ${response.statusText}`);
                 }
 
                 // Update the project cache after deleting a project
                 await updateProjectCache();
 
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Project with ID ${id} deleted successfully`,
-                        },
-                    ],
-                };
+                return createJsonResponse({ id }, true, `Project with ID ${id} deleted successfully`);
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error deleting project: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error deleting project");
             }
         }
     );

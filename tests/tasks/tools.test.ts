@@ -2,6 +2,7 @@ import { registerTaskTools } from '../../src/tasks/tools';
 import * as config from '../../src/config';
 import fetch from 'node-fetch';
 import { createMockResponse, mockTasks, mockBatchCheckResponse, mockProjectDataResponse } from '../mocks';
+import { parseJsonResponse } from '../utils';
 
 // Mock the config module
 jest.mock('../../src/config', () => {
@@ -102,7 +103,9 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toBe(JSON.stringify(mockTasks, null, 2));
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(true);
+      expect(jsonResponse.data.tasks).toEqual(mockTasks);
     });
 
     it('should use inbox ID when no project is specified', async () => {
@@ -127,7 +130,9 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toBe(JSON.stringify(mockTasks, null, 2));
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(true);
+      expect(jsonResponse.data.tasks).toEqual(mockTasks);
     });
 
     it('should handle missing inbox ID', async () => {
@@ -149,7 +154,9 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Inbox ID not found');
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(false);
+      expect(jsonResponse.message).toContain('Inbox ID not found');
 
       // Restore inboxId
       config.setAuthTokens(originalToken, config.isOAuthAuth, originalV2Token, originalInboxId);
@@ -206,8 +213,10 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Task created successfully');
-      expect(result.content[0].text).toContain(JSON.stringify(createdTask, null, 2));
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(true);
+      expect(jsonResponse.message).toBe('Task created successfully');
+      expect(jsonResponse.data).toEqual(createdTask);
     });
 
     it('should use inbox ID when no project is specified', async () => {
@@ -267,7 +276,11 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toBe('Task marked as completed successfully');
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(true);
+      expect(jsonResponse.message).toBe('Task marked as completed successfully');
+      expect(jsonResponse.data.id).toBe('task1');
+      expect(jsonResponse.data.completed).toBe(true);
     });
 
     it('should handle task not found', async () => {
@@ -294,15 +307,18 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Task with ID nonexistent-task not found');
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(false);
+      expect(jsonResponse.message).toContain('Task with ID nonexistent-task not found');
     });
   });
 
   describe('update-task', () => {
     it('should update a task with all parameters', async () => {
       // Mock successful API responses
+      const updatedTask = { ...mockTasks[0], title: 'Updated Task' };
       mockedFetch.mockResolvedValueOnce(createMockResponse(200, mockTasks[0])); // Get existing task
-      mockedFetch.mockResolvedValueOnce(createMockResponse(200, { ...mockTasks[0], title: 'Updated Task' })); // Update task
+      mockedFetch.mockResolvedValueOnce(createMockResponse(200, updatedTask)); // Update task
 
       registerTaskTools(mockServer);
 
@@ -343,7 +359,10 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Task updated successfully');
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(true);
+      expect(jsonResponse.message).toContain('Task updated successfully');
+      expect(jsonResponse.data).toEqual(updatedTask);
     });
   });
 
@@ -375,7 +394,9 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toBe(JSON.stringify(mockTasks[0], null, 2));
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(true);
+      expect(jsonResponse.data).toEqual(mockTasks[0]);
     });
 
     it('should use inbox ID when no project is specified', async () => {
@@ -428,7 +449,10 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Task with ID task1 deleted successfully');
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(true);
+      expect(jsonResponse.message).toContain('Task with ID task1 deleted successfully');
+      expect(jsonResponse.data.id).toBe('task1');
     });
   });
 
@@ -475,7 +499,12 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Task moved successfully');
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(true);
+      expect(jsonResponse.message).toContain('Task moved successfully');
+      expect(jsonResponse.data.taskId).toBe('task1');
+      expect(jsonResponse.data.fromProjectId).toBe('project1');
+      expect(jsonResponse.data.toProjectId).toBe('project2');
     });
 
     it('should handle missing v2 token', async () => {
@@ -501,7 +530,9 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Not authenticated with v2 API');
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(false);
+      expect(jsonResponse.message).toContain('Not authenticated with v2 API');
 
       // Restore v2AccessToken
       config.setAuthTokens(originalToken, config.isOAuthAuth, originalV2Token, originalInboxId);
@@ -544,7 +575,10 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Batch update completed: 2 tasks updated successfully');
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(true);
+      expect(jsonResponse.message).toContain('Batch update completed: 2 tasks updated successfully');
+      expect(jsonResponse.data.summary.success).toBe(2);
     });
 
     it('should handle batch-move-tasks', async () => {
@@ -589,7 +623,10 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Successfully moved 2 tasks');
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(true);
+      expect(jsonResponse.message).toContain('Successfully moved 2 tasks');
+      expect(jsonResponse.data.moves.length).toBe(2);
     });
 
     it('should handle batch-delete-tasks', async () => {
@@ -623,7 +660,10 @@ describe('Task Tools', () => {
 
       // Verify the result
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Batch delete completed: 2 tasks deleted successfully');
+      const jsonResponse = parseJsonResponse(result.content[0].text);
+      expect(jsonResponse.success).toBe(true);
+      expect(jsonResponse.message).toContain('Batch delete completed: 2 tasks deleted successfully');
+      expect(jsonResponse.data.summary.success).toBe(2);
     });
   });
 });

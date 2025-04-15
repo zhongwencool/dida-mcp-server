@@ -16,6 +16,7 @@ import {
     setAuthTokens,
     resetCacheData
 } from '../config';
+import { createJsonResponse, createJsonErrorResponse } from '../utils/response';
 
 // Helper function to get v1 API auth headers (Open API)
 export function getAuthHeaders() {
@@ -84,14 +85,7 @@ export async function authenticateWithStoredTokens() {
     try {
         // Check if we have any token available
         if ((!accessToken) && !v2AccessToken) {
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: "No access tokens available. Please run the server and make sure you've generated a token using get-access-token.js or configured v2 API token in the config file.",
-                    },
-                ],
-            };
+            return createJsonResponse(null, false, "No access tokens available. Please run the server and make sure you've generated a token using get-access-token.js or configured v2 API token in the config file.");
         }
 
         let authMessage = '';
@@ -216,14 +210,7 @@ export async function authenticateWithStoredTokens() {
 
         // Check if any authentication method succeeded
         if (!v1AuthSuccess && !v2AuthSuccess) {
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Authentication failed with all available methods:\n${authMessage}`,
-                    },
-                ],
-            };
+            return createJsonResponse(null, false, `Authentication failed with all available methods:\n${authMessage}`);
         }
 
         // Update the global state with our temporary maps
@@ -251,22 +238,24 @@ export async function authenticateWithStoredTokens() {
             }
         }
 
-        return {
-            content: [
-                {
-                    type: "text",
-                    text: `${authMessage}Found ${tempProjectsMap.size} projects and ${tempTagsMap.size} tags\nInbox ID: ${tempInboxId || 'Not found'}`
-                },
-            ],
+        // Create a structured response with authentication results
+        const authData = {
+            v1Api: {
+                authenticated: v1AuthSuccess,
+                method: "OAuth"
+            },
+            v2Api: {
+                authenticated: v2AuthSuccess
+            },
+            cachedData: {
+                projects: tempProjectsMap.size,
+                tags: tempTagsMap.size,
+                inboxId: tempInboxId || null
+            }
         };
+
+        return createJsonResponse(authData, true, `${authMessage}Found ${tempProjectsMap.size} projects and ${tempTagsMap.size} tags\nInbox ID: ${tempInboxId || 'Not found'}`);
     } catch (error) {
-        return {
-            content: [
-                {
-                    type: "text",
-                    text: `Authentication failed: ${error instanceof Error ? error.message : String(error)}`,
-                },
-            ],
-        };
+        return createJsonErrorResponse(error instanceof Error ? error : String(error), "Authentication failed");
     }
 }

@@ -3,6 +3,7 @@ import * as config from '../../src/config';
 import fetch from 'node-fetch';
 import { createMockResponse, mockProjects } from '../mocks';
 import * as cachedData from '../../src/resources/cached-data';
+import { parseJsonResponse } from '../utils';
 
 // Mock the config module
 jest.mock('../../src/config', () => {
@@ -120,7 +121,10 @@ describe('Project Tools', () => {
 
     // Verify the result
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toBe('Project cache refreshed successfully.');
+    const jsonResponse = parseJsonResponse(result.content[0].text);
+    expect(jsonResponse.success).toBe(true);
+    expect(jsonResponse.message).toBe('Project cache refreshed successfully.');
+    expect(jsonResponse.data.refreshed).toBe(true);
   });
 
   it('should handle list-projects tool execution', async () => {
@@ -153,7 +157,9 @@ describe('Project Tools', () => {
 
     // Verify the result
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toBe(JSON.stringify(mockProjects, null, 2));
+    const jsonResponse = parseJsonResponse(result.content[0].text);
+    expect(jsonResponse.success).toBe(true);
+    expect(jsonResponse.data).toEqual(mockProjects);
   });
 
   it('should handle create-project tool execution', async () => {
@@ -200,8 +206,10 @@ describe('Project Tools', () => {
 
     // Verify the result
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toContain('Project created successfully');
-    expect(result.content[0].text).toContain(JSON.stringify(createdProject, null, 2));
+    const jsonResponse = parseJsonResponse(result.content[0].text);
+    expect(jsonResponse.success).toBe(true);
+    expect(jsonResponse.message).toBe('Project created successfully');
+    expect(jsonResponse.data).toEqual(createdProject);
   });
 
   it('should handle update-project tool execution', async () => {
@@ -242,8 +250,10 @@ describe('Project Tools', () => {
 
     // Verify the result
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toContain('Project updated successfully');
-    expect(result.content[0].text).toContain(JSON.stringify(updatedProject, null, 2));
+    const jsonResponse = parseJsonResponse(result.content[0].text);
+    expect(jsonResponse.success).toBe(true);
+    expect(jsonResponse.message).toBe('Project updated successfully');
+    expect(jsonResponse.data).toEqual(updatedProject);
   });
 
   it('should handle delete-project tool execution', async () => {
@@ -278,7 +288,10 @@ describe('Project Tools', () => {
 
     // Verify the result
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toBe('Project with ID project1 deleted successfully');
+    const jsonResponse = parseJsonResponse(result.content[0].text);
+    expect(jsonResponse.success).toBe(true);
+    expect(jsonResponse.message).toBe('Project with ID project1 deleted successfully');
+    expect(jsonResponse.data.id).toBe('project1');
   });
 
   it('should handle not authenticated case', async () => {
@@ -300,7 +313,9 @@ describe('Project Tools', () => {
 
     // Verify the result
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toBe('Not authenticated. Please login first.');
+    const jsonResponse = parseJsonResponse(result.content[0].text);
+    expect(jsonResponse.success).toBe(false);
+    expect(jsonResponse.message).toBe('Not authenticated. Please login first.');
 
     // Restore accessToken
     config.setAuthTokens(originalToken, config.isOAuthAuth, originalV2Token, originalInboxId);
@@ -322,7 +337,9 @@ describe('Project Tools', () => {
 
     // Verify the result
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toBe('Failed to get projects: Error');
+    const jsonResponse = parseJsonResponse(result.content[0].text);
+    expect(jsonResponse.success).toBe(false);
+    expect(jsonResponse.message).toBe('Failed to get projects: Error');
   });
 
   it('should handle exception in refresh-project-cache', async () => {
@@ -341,6 +358,8 @@ describe('Project Tools', () => {
 
     // Verify the result
     expect(result.content[0].type).toBe('text');
-    expect(result.content[0].text).toContain('Error refreshing project cache: Cache error');
+    const jsonResponse = parseJsonResponse(result.content[0].text);
+    expect(jsonResponse.success).toBe(false);
+    expect(jsonResponse.error).toContain('Cache error');
   });
 });

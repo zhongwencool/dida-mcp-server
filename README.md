@@ -108,7 +108,7 @@ You can connect to the server using any MCP-compatible client. The server provid
     "dida": {
       "command": "node",
       "args": [
-        "/path/to/dida-mcp-server/build/index.js"
+        "/path/to/dida-mcp-server/dist/index.js"
       ]
     }
   }

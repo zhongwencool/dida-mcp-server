@@ -11,6 +11,7 @@ import {
     inboxId
 } from '../config';
 import { getAuthHeaders, getV2AuthHeaders } from '../auth/helpers';
+import { createJsonResponse, createJsonErrorResponse } from '../utils/response';
 
 // Register task management tools
 export function registerTaskTools(server: McpServer) {
@@ -23,27 +24,13 @@ export function registerTaskTools(server: McpServer) {
         async ({ projectId }) => {
             try {
                 if (!accessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated. Please login first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated. Please login first.");
                 }
 
                 // Use inbox if no project is specified
                 if (!projectId) {
                     if (!inboxId) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: "Inbox ID not found. Please run login-with-token first or specify a project ID.",
-                                },
-                            ],
-                        };
+                        return createJsonResponse(null, false, "Inbox ID not found. Please run login-with-token first or specify a project ID.");
                     }
 
                     // Use the stored inbox ID
@@ -57,36 +44,18 @@ export function registerTaskTools(server: McpServer) {
                 });
 
                 if (!response.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to get tasks: ${response.statusText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to get tasks: ${response.statusText}`);
                 }
 
                 const data = await response.json();
                 const tasks = data.tasks || [];
 
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: JSON.stringify(tasks, null, 2),
-                        },
-                    ],
-                };
+                return createJsonResponse({
+                    projectId,
+                    tasks
+                });
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error listing tasks: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error listing tasks");
             }
         }
     );
@@ -105,27 +74,13 @@ export function registerTaskTools(server: McpServer) {
         async ({ title, content, priority, dueDate, projectId, tags }) => {
             try {
                 if (!accessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated. Please login first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated. Please login first.");
                 }
 
                 // Use inbox if no project is specified
                 if (!projectId) {
                     if (!inboxId) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: "Inbox ID not found. Please run login-with-token first or specify a project ID.",
-                                },
-                            ],
-                        };
+                        return createJsonResponse(null, false, "Inbox ID not found. Please run login-with-token first or specify a project ID.");
                     }
 
                     // Use the stored inbox ID
@@ -155,35 +110,14 @@ export function registerTaskTools(server: McpServer) {
                 });
 
                 if (!response.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to create task: ${response.statusText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to create task: ${response.statusText}`);
                 }
 
                 const createdTask = await response.json();
 
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Task created successfully:\n${JSON.stringify(createdTask, null, 2)}`,
-                        },
-                    ],
-                };
+                return createJsonResponse(createdTask, true, "Task created successfully");
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error creating task: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error creating task");
             }
         }
     );
@@ -218,14 +152,7 @@ export function registerTaskTools(server: McpServer) {
                 });
 
                 if (!checkResponse.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to get tasks: ${checkResponse.statusText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to get tasks: ${checkResponse.statusText}`);
                 }
 
                 const data = await checkResponse.json();
@@ -254,14 +181,7 @@ export function registerTaskTools(server: McpServer) {
                 }
 
                 if (!taskProjectId || !foundTask) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Task with ID ${id} not found in any project`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Task with ID ${id} not found in any project`);
                 }
 
                 // Complete the task using the complete endpoint
@@ -272,46 +192,18 @@ export function registerTaskTools(server: McpServer) {
                 });
 
                 if (!completeResponse.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to complete task: ${completeResponse.statusText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to complete task: ${completeResponse.statusText}`);
                 }
 
                 const result = await completeResponse.json();
 
                 if (result.id2error && result.id2error[id]) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to complete task: ${result.id2error[id]}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to complete task: ${result.id2error[id]}`);
                 }
 
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Task marked as completed successfully`,
-                        },
-                    ],
-                };
+                return createJsonResponse({ id, completed: true }, true, "Task marked as completed successfully");
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error completing task: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error completing task");
             }
         }
     );
@@ -333,14 +225,7 @@ export function registerTaskTools(server: McpServer) {
         async ({ id, projectId, title, content, priority, dueDate, startDate, isAllDay, tags }) => {
             try {
                 if (!accessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated. Please login first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated. Please login first.");
                 }
 
                 // Project ID is now required
@@ -352,14 +237,7 @@ export function registerTaskTools(server: McpServer) {
                 });
 
                 if (!getResponse.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to get task: ${getResponse.statusText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to get task: ${getResponse.statusText}`);
                 }
 
                 const existingTask = await getResponse.json();
@@ -394,34 +272,13 @@ export function registerTaskTools(server: McpServer) {
                 });
 
                 if (!response.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to update task: ${response.statusText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to update task: ${response.statusText}`);
                 }
 
                 const updatedTask = await response.json();
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Task updated successfully:\n${JSON.stringify(updatedTask, null, 2)}`,
-                        },
-                    ],
-                };
+                return createJsonResponse(updatedTask, true, "Task updated successfully");
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error updating task: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error updating task");
             }
         }
     );
@@ -436,27 +293,13 @@ export function registerTaskTools(server: McpServer) {
         async ({ id, projectId }) => {
             try {
                 if (!accessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated. Please login first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated. Please login first.");
                 }
 
                 // Use inbox if no project is specified
                 if (!projectId) {
                     if (!inboxId) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: "Inbox ID not found. Please run login-with-token first or specify a project ID.",
-                                },
-                            ],
-                        };
+                        return createJsonResponse(null, false, "Inbox ID not found. Please run login-with-token first or specify a project ID.");
                     }
 
                     // Use the stored inbox ID
@@ -469,34 +312,13 @@ export function registerTaskTools(server: McpServer) {
                 });
 
                 if (!response.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to get task: ${response.statusText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to get task: ${response.statusText}`);
                 }
 
                 const task = await response.json();
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: JSON.stringify(task, null, 2),
-                        },
-                    ],
-                };
+                return createJsonResponse(task);
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error getting task: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error getting task");
             }
         }
     );
@@ -511,14 +333,7 @@ export function registerTaskTools(server: McpServer) {
         async ({ id, projectId }) => {
             try {
                 if (!accessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated. Please login first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated. Please login first.");
                 }
 
                 // Project ID is now required
@@ -530,32 +345,11 @@ export function registerTaskTools(server: McpServer) {
                 });
 
                 if (!response.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Task with ID ${id} not found in project ${projectId}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Task with ID ${id} not found in project ${projectId}`);
                 }
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Task with ID ${id} deleted successfully from project ${projectId}`,
-                        },
-                    ],
-                };
+                return createJsonResponse({ id, projectId }, true, `Task with ID ${id} deleted successfully from project ${projectId}`);
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error deleting task: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error deleting task");
             }
         }
     );
@@ -572,14 +366,7 @@ export function registerTaskTools(server: McpServer) {
             try {
                 // Check if v2 token is available (required for this endpoint)
                 if (!v2AccessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated with v2 API. Please login with a v2 token first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated with v2 API. Please login with a v2 token first.");
                 }
 
                 // Prepare the request payload
@@ -599,47 +386,24 @@ export function registerTaskTools(server: McpServer) {
                 });
 
                 if (!response.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to move task: ${response.statusText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to move task: ${response.statusText}`);
                 }
 
                 const result = await response.json();
 
                 // Check for errors in the response
                 if (result.id2error && Object.keys(result.id2error).length > 0) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to move task: ${JSON.stringify(result.id2error)}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to move task: ${JSON.stringify(result.id2error)}`);
                 }
 
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Task moved successfully from project ${fromProjectId} to project ${toProjectId}\nResponse: ${JSON.stringify(result, null, 2)}`,
-                        },
-                    ],
-                };
+                return createJsonResponse({
+                    taskId,
+                    fromProjectId,
+                    toProjectId,
+                    result
+                }, true, `Task moved successfully from project ${fromProjectId} to project ${toProjectId}`);
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error moving task: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error moving task");
             }
         }
     );
@@ -663,14 +427,7 @@ export function registerTaskTools(server: McpServer) {
         async ({ tasks }) => {
             try {
                 if (!accessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated. Please login first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated. Please login first.");
                 }
 
                 // Process each task to prepare the update data
@@ -751,43 +508,20 @@ export function registerTaskTools(server: McpServer) {
                 const successCount = results.filter(r => r.success).length;
                 const failureCount = results.length - successCount;
 
-                // Format the response
-                let responseText = `Batch update completed: ${successCount} tasks updated successfully, ${failureCount} failed.\n\n`;
-
-                // Add details for successful updates
-                if (successCount > 0) {
-                    responseText += "Successfully updated tasks:\n";
-                    results.filter(r => r.success).forEach(result => {
-                        responseText += `- Task ID: ${result.id}\n`;
-                    });
-                    responseText += "\n";
-                }
-
-                // Add details for failures
-                if (failureCount > 0) {
-                    responseText += "Failed updates:\n";
-                    results.filter(r => !r.success).forEach(result => {
-                        responseText += `- Task ID: ${result.id}, Error: ${result.error}\n`;
-                    });
-                }
-
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: responseText,
-                        },
-                    ],
+                // Create a structured response
+                const response = {
+                    summary: {
+                        total: results.length,
+                        success: successCount,
+                        failed: failureCount
+                    },
+                    successfulTasks: results.filter(r => r.success).map(r => ({ id: r.id, task: r.task })),
+                    failedTasks: results.filter(r => !r.success).map(r => ({ id: r.id, error: r.error }))
                 };
+
+                return createJsonResponse(response, true, `Batch update completed: ${successCount} tasks updated successfully, ${failureCount} failed.`);
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error in batch update: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error in batch update");
             }
         }
     );
@@ -806,14 +540,7 @@ export function registerTaskTools(server: McpServer) {
             try {
                 // Check if v2 token is available (required for this endpoint)
                 if (!v2AccessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated with v2 API. Please login with a v2 token first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated with v2 API. Please login with a v2 token first.");
                 }
 
                 // Prepare the request payload - the API already accepts an array
@@ -831,14 +558,7 @@ export function registerTaskTools(server: McpServer) {
                 });
 
                 if (!response.ok) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to move tasks: ${response.statusText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, `Failed to move tasks: ${response.statusText}`);
                 }
 
                 const result = await response.json();
@@ -847,38 +567,26 @@ export function registerTaskTools(server: McpServer) {
                 const hasErrors = result.id2error && Object.keys(result.id2error).length > 0;
 
                 if (hasErrors) {
-                    let errorText = "Some tasks could not be moved:\n";
+                    // Create a structured response with error details
+                    const errorDetails: Record<string, any> = {};
                     for (const [taskId, error] of Object.entries(result.id2error)) {
-                        errorText += `- Task ID ${taskId}: ${error}\n`;
+                        errorDetails[taskId] = error;
                     }
 
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Batch move partially completed with errors:\n${errorText}`,
-                            },
-                        ],
-                    };
+                    return createJsonResponse({
+                        moves,
+                        errors: errorDetails,
+                        partialSuccess: true
+                    }, false, "Batch move partially completed with errors");
                 }
 
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Successfully moved ${moves.length} tasks to their new projects.`,
-                        },
-                    ],
-                };
+                return createJsonResponse({
+                    moves,
+                    success: true,
+                    count: moves.length
+                }, true, `Successfully moved ${moves.length} tasks to their new projects.`);
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error moving tasks: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error moving tasks");
             }
         }
     );
@@ -895,14 +603,7 @@ export function registerTaskTools(server: McpServer) {
         async ({ tasks }) => {
             try {
                 if (!accessToken) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Not authenticated. Please login first.",
-                            },
-                        ],
-                    };
+                    return createJsonResponse(null, false, "Not authenticated. Please login first.");
                 }
 
                 // Process each task deletion
@@ -945,43 +646,20 @@ export function registerTaskTools(server: McpServer) {
                 const successCount = results.filter(r => r.success).length;
                 const failureCount = results.length - successCount;
 
-                // Format the response
-                let responseText = `Batch delete completed: ${successCount} tasks deleted successfully, ${failureCount} failed.\n\n`;
-
-                // Add details for successful deletions
-                if (successCount > 0) {
-                    responseText += "Successfully deleted tasks:\n";
-                    results.filter(r => r.success).forEach(result => {
-                        responseText += `- Task ID: ${result.id} from project: ${result.projectId}\n`;
-                    });
-                    responseText += "\n";
-                }
-
-                // Add details for failures
-                if (failureCount > 0) {
-                    responseText += "Failed deletions:\n";
-                    results.filter(r => !r.success).forEach(result => {
-                        responseText += `- Task ID: ${result.id}, Project ID: ${result.projectId}, Error: ${result.error}\n`;
-                    });
-                }
-
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: responseText,
-                        },
-                    ],
+                // Create a structured response
+                const response = {
+                    summary: {
+                        total: results.length,
+                        success: successCount,
+                        failed: failureCount
+                    },
+                    successfulDeletes: results.filter(r => r.success).map(r => ({ id: r.id, projectId: r.projectId })),
+                    failedDeletes: results.filter(r => !r.success).map(r => ({ id: r.id, projectId: r.projectId, error: r.error }))
                 };
+
+                return createJsonResponse(response, true, `Batch delete completed: ${successCount} tasks deleted successfully, ${failureCount} failed.`);
             } catch (error) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Error in batch delete: ${error instanceof Error ? error.message : String(error)}`,
-                        },
-                    ],
-                };
+                return createJsonErrorResponse(error instanceof Error ? error : String(error), "Error in batch delete");
             }
         }
     );
