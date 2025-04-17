@@ -26,9 +26,21 @@ Dida MCP Server is built on the [Model Context Protocol](https://modelcontextpro
 
 ## Installation
 
+### Option 1: Install from npm (Recommended)
+
+```bash
+# Install globally
+npm install -g dida-mcp-server
+
+# Or install locally in your project
+npm install dida-mcp-server
+```
+
+### Option 2: Install from source
+
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/dida-mcp-server.git
+git clone https://github.com/zhongwencool/dida-mcp-server.git
 cd dida-mcp-server
 
 # Install dependencies
@@ -47,9 +59,13 @@ Before using the server, you need to authenticate with TickTick/Dida365. The ser
 
 ### Using get-access-token
 
-The `get-access-token.ts` script handles the authentication process for both API versions. To use it:
+The `get-access-token` script handles the authentication process for both API versions. To use it:
 
 ```bash
+# If installed globally
+dida-get-token
+
+# If installed locally or from source
 npm run get-token
 ```
 
@@ -93,6 +109,10 @@ This file is automatically detected and used by the server when it starts.
 ### Starting the Server
 
 ```bash
+# If installed globally
+dida-mcp-server
+
+# If installed locally or from source
 npm start
 ```
 
@@ -106,9 +126,21 @@ You can connect to the server using any MCP-compatible client. The server provid
 {
   "mcpServers": {
     "dida": {
+      "command": "dida-mcp-server"
+    }
+  }
+}
+```
+
+Or if you installed it locally:
+
+```json
+{
+  "mcpServers": {
+    "dida": {
       "command": "node",
       "args": [
-        "/path/to/dida-mcp-server/dist/index.js"
+        "/path/to/node_modules/dida-mcp-server/dist/index.js"
       ]
     }
   }
@@ -178,6 +210,7 @@ npm run test:watch
 ## Project Structure
 
 ```
+├── dist/              # Compiled JavaScript files
 ├── src/
 │   ├── auth/           # Authentication-related code
 │   ├── projects/       # Project management tools
@@ -191,6 +224,7 @@ npm run test:watch
 │   └── systemPrompt.ts # GTD assistant system prompt
 ├── tests/              # Test files
 ├── package.json        # Project metadata and dependencies
+├── LICENSE             # ISC License file
 └── tsconfig.json      # TypeScript configuration
 ```
 
@@ -201,6 +235,29 @@ This project uses the Dida365 Open API. For more information, see the [Dida365 O
 ## License
 
 ISC
+
+## Publishing to NPM
+
+To publish the package to NPM, follow these steps:
+
+```bash
+# Login to npm (if not already logged in)
+npm login
+
+# Build the project
+npm run build
+
+# Test the package
+npm test
+
+# Publish to npm
+npm publish
+```
+
+To update the package:
+
+1. Update the version in `package.json`
+2. Run `npm publish`
 
 ## Contributing
 
