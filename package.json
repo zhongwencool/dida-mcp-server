@@ -44,7 +44,7 @@
     "url": "https://github.com/zhongwencool/dida-mcp-server.git"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.9.0",
+    "@modelcontextprotocol/sdk": "^1.24.0",
     "node-fetch": "^2.7.0",
     "open": "^10.1.0",
     "punycode": "^2.3.1",
